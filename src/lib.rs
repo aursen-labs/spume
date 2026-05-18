@@ -39,6 +39,7 @@ pub mod pubsub_provider;
 ///
 /// Cheap to construct (no connection is opened until the first request) and
 /// cheap to clone (the underlying provider is reference-counted).
+#[derive(Clone, Debug)]
 pub struct WasmClient {
     provider: HttpProvider,
 }
