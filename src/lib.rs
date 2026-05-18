@@ -57,6 +57,22 @@ impl WasmClient {
     pub fn url(&self) -> &str {
         &self.provider.url
     }
+
+    /// Attach a custom header sent with every request.
+    ///
+    /// Convenience pass-through to [`HttpProvider::with_header`] for the
+    /// common builder-style chain:
+    ///
+    /// ```no_run
+    /// use spume::WasmClient;
+    /// let client = WasmClient::new("https://rpc.example.com")
+    ///     .with_header("x-api-key", "my-secret-key");
+    /// ```
+    #[must_use]
+    pub fn with_header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.provider = self.provider.with_header(key, value);
+        self
+    }
 }
 
 /// Solana JSON-RPC PubSub client over a single WebSocket connection.

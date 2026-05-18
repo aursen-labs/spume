@@ -36,6 +36,15 @@ async fn http_get_health() {
 }
 
 #[wasm_bindgen_test]
+async fn http_with_header_does_not_break_request() {
+    let client = WasmClient::new(RPC_URL)
+        .with_header("x-api-key", "test-key-123")
+        .with_header("authorization", "Bearer some-token");
+    let result = client.get_health().await.expect("getHealth failed");
+    assert_eq!(result, "ok");
+}
+
+#[wasm_bindgen_test]
 async fn http_get_version() {
     let client = WasmClient::new(RPC_URL);
     let version = client.get_version().await.expect("getVersion failed");

@@ -25,6 +25,7 @@ pub struct HttpProvider {
     pub(crate) url: String,
     timeout: u32,
     id: Rc<Cell<u64>>,
+    headers: Vec<(String, String)>,
 }
 
 impl HttpProvider {
@@ -33,6 +34,7 @@ impl HttpProvider {
             url: url.to_string(),
             timeout: 60000,
             id: Rc::new(Cell::new(0)),
+            headers: Vec::new(),
         }
     }
 
@@ -41,7 +43,18 @@ impl HttpProvider {
             url: url.to_string(),
             timeout,
             id: Rc::new(Cell::new(0)),
+            headers: Vec::new(),
         }
+    }
+
+    /// Attach a custom header that will be sent with every request.
+    ///
+    /// Use this to authenticate with hosted RPC providers, e.g.
+    /// `HttpProvider::new(url).with_header("x-api-key", "…")`.
+    #[must_use]
+    pub fn with_header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.headers.push((key.into(), value.into()));
+        self
     }
 }
 
@@ -58,11 +71,15 @@ impl HttpProvider {
             .to_string();
         let ctrl = AbortController::new().unwrap_throw();
         let timeout_fut = TimeoutFuture::new(self.timeout);
-        let req_fut = RequestBuilder::new(&self.url)
+        let mut builder = RequestBuilder::new(&self.url)
             .method(HttpMethod::POST)
             .abort_signal(Some(&ctrl.signal()))
             .header("Content-Type", "application/json")
-            .header("Accept", "application/json")
+            .header("Accept", "application/json");
+        for (key, value) in &self.headers {
+            builder = builder.header(key, value);
+        }
+        let req_fut = builder
             .body(body)
             .map_err(|err| Box::new(RpcError::RpcRequestError(err.to_string())))?
             .send();
