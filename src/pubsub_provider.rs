@@ -22,7 +22,7 @@ use {
 };
 
 type PendingMap = RefCell<HashMap<u64, oneshot::Sender<Result<Value, Box<RpcError>>>>>;
-type SubsMap = RefCell<HashMap<u64, mpsc::UnboundedSender<Value>>>;
+type SubsMap = RefCell<HashMap<u64, mpsc::UnboundedSender<Result<Value, Box<RpcError>>>>>;
 
 struct PubsubInner {
     out_tx: mpsc::UnboundedSender<Message>,
@@ -88,14 +88,20 @@ impl PubsubProvider {
                     Err(_) => break,
                 }
             }
-            // Connection closed: fail any in-flight requests and drop subscription
-            // channels so consumers observe end-of-stream.
-            for (_, tx) in reader_inner.pending.borrow_mut().drain() {
-                let _ = tx.send(Err(Box::new(RpcError::RpcRequestError(
+            // Connection closed: fail any in-flight requests and every live
+            // subscription with the same error so consumers can distinguish a
+            // disconnect from a normal end-of-stream.
+            let disconnect_err = || -> Box<RpcError> {
+                Box::new(RpcError::RpcRequestError(
                     "websocket connection closed".into(),
-                ))));
+                ))
+            };
+            for (_, tx) in reader_inner.pending.borrow_mut().drain() {
+                let _ = tx.send(Err(disconnect_err()));
             }
-            reader_inner.subscriptions.borrow_mut().clear();
+            for (_, tx) in reader_inner.subscriptions.borrow_mut().drain() {
+                let _ = tx.unbounded_send(Err(disconnect_err()));
+            }
         });
 
         Ok(Self { url, inner })
@@ -118,7 +124,7 @@ impl PubsubProvider {
         let id: u64 = serde_json::from_value(result)
             .map_err(|err| Box::new(RpcError::ParseError(err.to_string())))?;
 
-        let (tx, rx) = mpsc::unbounded::<Value>();
+        let (tx, rx) = mpsc::unbounded::<Result<Value, Box<RpcError>>>();
         self.inner.subscriptions.borrow_mut().insert(id, tx);
 
         Ok(Subscription {
@@ -194,7 +200,7 @@ fn dispatch_message(inner: &Rc<PubsubInner>, value: Value) {
     };
     let result = params.get("result").cloned().unwrap_or(Value::Null);
     if let Some(sender) = inner.subscriptions.borrow().get(&sub_id) {
-        let _ = sender.unbounded_send(result);
+        let _ = sender.unbounded_send(Ok(result));
     }
 }
 
@@ -206,7 +212,7 @@ fn dispatch_message(inner: &Rc<PubsubInner>, value: Value) {
 pub struct Subscription<T> {
     id: u64,
     unsubscribe_method: &'static str,
-    rx: mpsc::UnboundedReceiver<Value>,
+    rx: mpsc::UnboundedReceiver<Result<Value, Box<RpcError>>>,
     inner: Rc<PubsubInner>,
     unsubscribed: bool,
     _phantom: PhantomData<fn() -> T>,
@@ -243,10 +249,11 @@ impl<T: DeserializeOwned> Stream for Subscription<T> {
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
         match Pin::new(&mut this.rx).poll_next(cx) {
-            Poll::Ready(Some(value)) => Poll::Ready(Some(
+            Poll::Ready(Some(Ok(value))) => Poll::Ready(Some(
                 serde_json::from_value(value)
                     .map_err(|err| Box::new(RpcError::ParseError(err.to_string()))),
             )),
+            Poll::Ready(Some(Err(err))) => Poll::Ready(Some(Err(err))),
             Poll::Ready(None) => Poll::Ready(None),
             Poll::Pending => Poll::Pending,
         }
