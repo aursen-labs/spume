@@ -1,6 +1,6 @@
 [package]
 name = "spume"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "Lightweight, ergonomic Solana JSON-RPC wasm client"
 license = "Apache-2.0"
