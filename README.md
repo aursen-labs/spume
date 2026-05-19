@@ -42,6 +42,20 @@ let balance = client.get_balance(&owner, None).await?.value;
 
 See [`src/methods.rs`](src/methods.rs) for the full list of RPC methods.
 
+### Response size limit
+
+HTTP responses are capped at **10 MiB by default** so a misconfigured or
+malicious RPC can't OOM the wasm runtime with a multi-gigabyte body. Tune the
+limit with `.with_max_response_size(bytes)`:
+
+```rust
+// 50 MiB for `getProgramAccounts` on a busy program:
+let client = WasmClient::new("https://rpc.example.com")
+    .with_max_response_size(50 * 1024 * 1024);
+```
+
+Oversized responses are rejected with `RpcError::RpcRequestError("response body too large …")` — pre-flight via `Content-Length`, or post-read for chunked encoding.
+
 ## WebSocket / PubSub usage
 
 > Requires the `pubsub` feature.

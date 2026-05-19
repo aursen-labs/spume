@@ -74,6 +74,23 @@ impl WasmClient {
         self.provider = self.provider.with_header(key, value);
         self
     }
+
+    /// Set the maximum response body size in bytes (default 10 MiB).
+    ///
+    /// Responses larger than this limit are rejected with an error before
+    /// being buffered into memory.
+    ///
+    /// ```no_run
+    /// use spume::WasmClient;
+    /// // Loosen the cap to 50 MiB for `getProgramAccounts` on a busy program:
+    /// let client = WasmClient::new("https://rpc.example.com")
+    ///     .with_max_response_size(50 * 1024 * 1024);
+    /// ```
+    #[must_use]
+    pub fn with_max_response_size(mut self, bytes: usize) -> Self {
+        self.provider = self.provider.with_max_response_size(bytes);
+        self
+    }
 }
 
 /// Solana JSON-RPC PubSub client over a single WebSocket connection.

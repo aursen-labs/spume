@@ -46,6 +46,27 @@ async fn http_with_header_does_not_break_request() {
 }
 
 #[wasm_bindgen_test]
+async fn http_max_response_size_rejects_oversized() {
+    let client = WasmClient::new(RPC_URL).with_max_response_size(8);
+    let err = client
+        .get_health()
+        .await
+        .expect_err("expected size-limit rejection, got Ok");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("response body too large"),
+        "unexpected error: {msg}"
+    );
+}
+
+#[wasm_bindgen_test]
+async fn http_max_response_size_allows_normal_request() {
+    let client = WasmClient::new(RPC_URL).with_max_response_size(10 * 1024 * 1024);
+    let result = client.get_health().await.expect("getHealth failed");
+    assert_eq!(result, "ok");
+}
+
+#[wasm_bindgen_test]
 async fn http_get_version() {
     let client = WasmClient::new(RPC_URL);
     let version = client.get_version().await.expect("getVersion failed");

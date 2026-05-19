@@ -20,12 +20,16 @@ struct JsonRpcError {
     data: Option<Value>,
 }
 
+/// Default cap on response body size.
+const DEFAULT_MAX_RESPONSE_SIZE: usize = 10 * 1024 * 1024;
+
 #[derive(Clone, Debug)]
 pub struct HttpProvider {
     pub(crate) url: String,
     timeout: u32,
     id: Rc<Cell<u64>>,
     headers: Vec<(String, String)>,
+    max_response_size: usize,
 }
 
 impl HttpProvider {
@@ -36,6 +40,7 @@ impl HttpProvider {
             timeout: 60000,
             id: Rc::new(Cell::new(0)),
             headers: Vec::new(),
+            max_response_size: DEFAULT_MAX_RESPONSE_SIZE,
         }
     }
     #[must_use]
@@ -45,6 +50,7 @@ impl HttpProvider {
             timeout,
             id: Rc::new(Cell::new(0)),
             headers: Vec::new(),
+            max_response_size: DEFAULT_MAX_RESPONSE_SIZE,
         }
     }
 
@@ -55,6 +61,13 @@ impl HttpProvider {
     #[must_use]
     pub fn with_header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.headers.push((key.into(), value.into()));
+        self
+    }
+
+    /// Set the maximum response body size in bytes (default 10 MiB).
+    #[must_use]
+    pub fn with_max_response_size(mut self, bytes: usize) -> Self {
+        self.max_response_size = bytes;
         self
     }
 }
@@ -103,10 +116,31 @@ impl HttpProvider {
             response.map_err(|err| Box::new(RpcError::RpcRequestError(err.to_string())))?;
         let status =
             StatusCode::from_u16(response.status()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+
+        if let Some(len) = response
+            .headers()
+            .get("content-length")
+            .and_then(|v| v.parse::<usize>().ok())
+            && len > self.max_response_size
+        {
+            return Err(Box::new(RpcError::RpcRequestError(format!(
+                "response body too large: {len} bytes (limit: {})",
+                self.max_response_size
+            ))));
+        }
+
         let text = response
             .text()
             .await
             .map_err(|err| Box::new(RpcError::RpcRequestError(err.to_string())))?;
+
+        if text.len() > self.max_response_size {
+            return Err(Box::new(RpcError::RpcRequestError(format!(
+                "response body too large: {} bytes (limit: {})",
+                text.len(),
+                self.max_response_size
+            ))));
+        }
 
         let response_json = match serde_json::from_str::<Value>(&text) {
             Ok(response_json) => response_json,
