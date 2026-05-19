@@ -17,6 +17,7 @@ use {
 };
 use {
     solana_address::{Address, address},
+    solana_rpc_client_types::config::{CommitmentConfig, RpcContextConfig},
     spume::WasmClient,
     wasm_bindgen_test::wasm_bindgen_test,
 };
@@ -106,6 +107,33 @@ async fn http_get_balance_for_system_program() {
         .get_balance(&SYSTEM_PROGRAM, None)
         .await
         .expect("getBalance failed");
+}
+
+#[wasm_bindgen_test]
+async fn http_get_blocks_with_none_end_slot() {
+    let client = WasmClient::new(RPC_URL);
+    let slot = client.get_slot(None).await.expect("getSlot failed");
+    let start = slot.saturating_sub(5);
+    let _blocks = client
+        .get_blocks(
+            start,
+            None,
+            Some(RpcContextConfig {
+                commitment: Some(CommitmentConfig::finalized()),
+                ..Default::default()
+            }),
+        )
+        .await
+        .expect("getBlocks with None params failed");
+}
+
+#[wasm_bindgen_test]
+async fn http_get_leader_schedule_with_none_slot_and_config() {
+    let client = WasmClient::new(RPC_URL);
+    let _schedule = client
+        .get_leader_schedule(None, None)
+        .await
+        .expect("getLeaderSchedule with None params failed");
 }
 
 #[wasm_bindgen_test]
