@@ -26,6 +26,7 @@ use crate::provider::HttpProvider;
 #[cfg(feature = "pubsub")]
 use crate::pubsub_provider::PubsubProvider;
 
+mod batch;
 mod methods;
 pub mod provider;
 
