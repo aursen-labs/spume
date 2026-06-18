@@ -179,9 +179,8 @@ impl HttpProvider {
 
     pub(crate) async fn batch_send(
         &self,
-        ids: &[u64],
         requests: Vec<Value>,
-    ) -> Result<Vec<Result<Value, Box<RpcError>>>, Box<RpcError>> {
+    ) -> Result<Vec<Value>, Box<RpcError>> {
         let body = Value::Array(requests).to_string();
 
         let ctrl = AbortController::new().unwrap_throw();
@@ -243,38 +242,19 @@ impl HttpProvider {
             ))));
         }
 
-        let response_array: Vec<Value> = serde_json::from_str(&text)
-            .map_err(|err| Box::new(RpcError::ParseError(err.to_string())))?;
-
-        let mut by_id: std::collections::HashMap<u64, Value> =
-            std::collections::HashMap::with_capacity(response_array.len());
-
-        for entry in response_array {
-            if let Some(id) = entry.get("id").and_then(Value::as_u64) {
-                by_id.insert(id, entry);
-            }
+        if !status.is_success() {
+            return Err(Box::new(RpcError::RpcRequestError(format!(
+                "HTTP {}: {}",
+                status.as_u16(),
+                text
+            ))));
         }
 
-        let results = ids
-            .iter()
-            .map(|id| {
-                let entry = by_id.remove(id).ok_or_else(|| {
-                    Box::new(RpcError::RpcRequestError(format!(
-                        "Missing Response For Request ID: {id}"
-                    )))
-                })?;
-
-                if let Some(error) = entry.get("error").filter(|e| !e.is_null()) {
-                    return Err(parse_rpc_error(error));
-                }
-
-                entry.get("result").cloned().ok_or_else(|| {
-                    Box::new(RpcError::ParseError("Missing Result Field".to_string()))
-                })
-            })
-            .collect();
-
-        Ok(results)
+        serde_json::from_str(&text).map_err(|err| {
+            Box::new(RpcError::ParseError(format!(
+                "batch response is not a JSON array ({err}); server returned: {text}"
+            )))
+        })
     }
 
     pub(crate) fn next_id(&self) -> u64 {

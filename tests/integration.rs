@@ -18,7 +18,7 @@ use {
 use {
     solana_address::{Address, address},
     solana_rpc_client_types::config::{CommitmentConfig, RpcContextConfig},
-    spume::WasmClient,
+    spume::{WasmClient, methods::GetSlot},
     wasm_bindgen_test::wasm_bindgen_test,
 };
 
@@ -155,6 +155,32 @@ async fn http_get_leader_schedule_with_none_slot_and_config() {
         .get_leader_schedule(None, None)
         .await
         .expect("getLeaderSchedule with None params failed");
+}
+
+// NOTE: live batch.send() tests are not included here. Surfpool's middleware
+// rejects JSON-RPC batch requests outright ("Only method calls are supported"),
+// so they cannot run against the local validator. The batch decoding logic is
+// exercised by the unit tests inside `src/batch.rs` instead.
+
+#[wasm_bindgen_test]
+async fn http_batch_empty_send_is_ok() {
+    let client = WasmClient::new(RPC_URL);
+    let batch = client.batch();
+    assert!(batch.is_empty());
+    let res = batch.send().await.expect("empty batch send failed");
+    assert!(res.is_empty());
+}
+
+#[wasm_bindgen_test]
+async fn http_call_dispatches_via_trait() {
+    // The generic single-shot path. Equivalent to `client.get_slot(None)` but
+    // exercises the trait-based routing.
+    let client = WasmClient::new(RPC_URL);
+    let slot = client
+        .call(GetSlot { config: None })
+        .await
+        .expect("call(GetSlot) failed");
+    assert!(slot > 0);
 }
 
 #[wasm_bindgen_test]

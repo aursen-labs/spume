@@ -26,9 +26,11 @@ use crate::provider::HttpProvider;
 #[cfg(feature = "pubsub")]
 use crate::pubsub_provider::PubsubProvider;
 
-mod batch;
-mod methods;
+pub mod batch;
+pub mod methods;
 pub mod provider;
+
+pub use crate::batch::{BatchHandle, BatchRequest, BatchResponse, RpcMethod};
 
 #[cfg(feature = "pubsub")]
 mod pubsub_methods;
