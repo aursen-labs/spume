@@ -59,10 +59,10 @@ jobs:
           key: wasm32
 
       # wasm-bindgen-cli version must match the wasm-bindgen crate version
-      # pulled in transitively (currently 0.2.121).
+      # pulled in transitively (currently 0.2.125).
       - uses: taiki-e/install-action@v2
         with:
-          tool: wasm-bindgen-cli@0.2.121,just
+          tool: wasm-bindgen-cli@0.2.125,just
 
       - name: Install surfpool
         run: |
