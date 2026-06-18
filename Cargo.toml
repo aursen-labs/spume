@@ -22,7 +22,6 @@ futures = "0.3"
 getrandom = { version = "0.3", features = ["wasm_js"] }
 gloo-net = { version = "0.7.0", default-features = false, features = ["http", "json"] }
 gloo-timers = { version = "0.4", features = ["futures"] }
-http = "1.4"
 serde = "1"
 serde_json = "1"
 solana-address = "2"

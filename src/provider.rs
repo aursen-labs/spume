@@ -5,7 +5,6 @@ use {
     },
     gloo_net::http::{Method as HttpMethod, RequestBuilder},
     gloo_timers::future::TimeoutFuture,
-    http::StatusCode,
     serde::{Deserialize, de::DeserializeOwned},
     serde_json::Value,
     solana_rpc_client_types::request::{RpcError, RpcRequest, RpcResponseErrorData},
@@ -114,8 +113,8 @@ impl HttpProvider {
 
         let response =
             response.map_err(|err| Box::new(RpcError::RpcRequestError(err.to_string())))?;
-        let status =
-            StatusCode::from_u16(response.status()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        let status = response.status();
+        let is_success = (200..300).contains(&status);
 
         let text = response
             .text()
@@ -132,14 +131,12 @@ impl HttpProvider {
 
         let response_json = match serde_json::from_str::<Value>(&text) {
             Ok(response_json) => response_json,
-            Err(err) if status.is_success() => {
+            Err(err) if is_success => {
                 return Err(Box::new(RpcError::ParseError(err.to_string())));
             }
             Err(_) => {
                 return Err(Box::new(RpcError::RpcRequestError(format!(
-                    "HTTP {}: {}",
-                    status.as_u16(),
-                    text
+                    "HTTP {status}: {text}"
                 ))));
             }
         };
@@ -148,7 +145,7 @@ impl HttpProvider {
             return Err(parse_rpc_error(error));
         }
 
-        if status.is_success() {
+        if is_success {
             serde_json::from_value(
                 response_json
                     .get("result")
@@ -158,9 +155,7 @@ impl HttpProvider {
             .map_err(|err| Box::new(RpcError::ParseError(err.to_string())))
         } else {
             Err(Box::new(RpcError::RpcRequestError(format!(
-                "HTTP {}: {}",
-                status.as_u16(),
-                text
+                "HTTP {status}: {text}"
             ))))
         }
     }
