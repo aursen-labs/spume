@@ -117,18 +117,6 @@ impl HttpProvider {
         let status =
             StatusCode::from_u16(response.status()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
-        if let Some(len) = response
-            .headers()
-            .get("content-length")
-            .and_then(|v| v.parse::<usize>().ok())
-            && len > self.max_response_size
-        {
-            return Err(Box::new(RpcError::RpcRequestError(format!(
-                "response body too large: {len} bytes (limit: {})",
-                self.max_response_size
-            ))));
-        }
-
         let text = response
             .text()
             .await
