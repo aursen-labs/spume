@@ -48,11 +48,11 @@ impl WasmClient {
     /// Fetch the lamport balance of an account.
     pub async fn get_balance(
         &self,
-        address: &Address,
+        address: impl AsRef<str>,
         config: Option<RpcContextConfig>,
     ) -> RpcResult<Response<u64>> {
         self.provider
-            .send(RpcRequest::GetBalance, json!([address.to_string(), config]))
+            .send(RpcRequest::GetBalance, json!([address.as_ref(), config]))
             .await
     }
 

@@ -125,7 +125,7 @@ async fn http_get_account_info_for_system_program() {
 async fn http_get_balance_for_system_program() {
     let client = WasmClient::new(RPC_URL);
     let _ = client
-        .get_balance(&SYSTEM_PROGRAM, None)
+        .get_balance("11111111111111111111111111111111", None)
         .await
         .expect("getBalance failed");
 }
