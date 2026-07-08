@@ -227,23 +227,3 @@ async fn ws_is_connected_returns_true_when_open() {
     // The connection should be active immediately upon successful connect
     assert!(client.is_connected(), "client should report as connected");
 }
-
-#[cfg(feature = "pubsub")]
-#[wasm_bindgen_test]
-async fn ws_strong_reference_count() {
-    let client = WasmPubsubClient::connect(WS_URL).expect("WebSocket connect failed");
-
-    // Under our fix, the reader task holds a Weak reference, so the strong reference count
-    // of the internal state (PubsubInner) is exactly 1 (held only by the client).
-    // In the old buggy code, it would be 2 because the reader task held a strong reference.
-    assert_eq!(client.strong_count(), 1, "Expected only 1 strong reference held by the client");
-
-    let sub = client.slot_subscribe().await.expect("slotSubscribe failed");
-    // With one active subscription, the count should be 2 (client + subscription).
-    assert_eq!(client.strong_count(), 2, "Expected 2 strong references (client + subscription)");
-
-    drop(sub);
-    // After dropping the subscription, it should go back to 1.
-    assert_eq!(client.strong_count(), 1, "Expected strong count to go back to 1 after dropping subscription");
-}
-

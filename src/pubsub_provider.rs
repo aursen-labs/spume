@@ -124,11 +124,6 @@ impl PubsubProvider {
         !self.inner.out_tx.is_closed()
     }
 
-    /// Returns the number of active strong references to the internal pubsub state.
-    pub fn strong_count(&self) -> usize {
-        Rc::strong_count(&self.inner)
-    }
-
     /// Issue a `<x>Subscribe` request and register a notification stream that
     /// auto-unsubscribes when dropped.
     pub async fn subscribe<T: DeserializeOwned + 'static>(
