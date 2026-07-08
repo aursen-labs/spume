@@ -19,16 +19,19 @@ pubsub = ["dep:wasm-bindgen-futures", "gloo-net/websocket"]
 
 [dependencies]
 futures = "0.3"
-getrandom = { version = "0.3", features = ["wasm_js"] }
-gloo-net = { version = "0.7.0", default-features = false, features = ["http", "json"] }
+getrandom = { version = "0.3.4", features = ["wasm_js"] }
+gloo-net = { version = "0.7.0", default-features = false, features = [
+    "http",
+    "json",
+] }
 gloo-timers = { version = "0.4", features = ["futures"] }
 serde = "1"
 serde_json = "1"
 solana-address = "2"
 solana-epoch-info = { version = "3.1", features = ["serde"] }
 solana-epoch-schedule = { version = "3.1", features = ["serde"] }
-solana-rpc-client-types = "=4.0.0-rc.0"
-solana-transaction-status-client-types = "=4.0.0-rc.0"
+solana-rpc-client-types = "4.1.1"
+solana-transaction-status-client-types = "4.1.1"
 wasm-bindgen-futures = { version = "0.4", optional = true }
 web-sys = { version = "0.3", features = ["AbortController", "WebSocket"] }
 
