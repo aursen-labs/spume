@@ -30,7 +30,7 @@ solana-epoch-schedule = { version = "3.1", features = ["serde"] }
 solana-rpc-client-types = "=4.0.0-rc.0"
 solana-transaction-status-client-types = "=4.0.0-rc.0"
 wasm-bindgen-futures = { version = "0.4", optional = true }
-web-sys = { version = "0.3", features = ["AbortController"] }
+web-sys = { version = "0.3", features = ["AbortController", "WebSocket"] }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

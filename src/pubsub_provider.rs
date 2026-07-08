@@ -54,7 +54,9 @@ impl PubsubProvider {
     #[must_use = "pubsub connection result must be handled"]
     pub fn connect(url: impl ToString) -> Result<Self, Box<RpcError>> {
         let url = url.to_string();
-        let ws = WebSocket::open(&url)
+        let raw = web_sys::WebSocket::new(&url)
+            .map_err(|err| Box::new(RpcError::RpcRequestError(format!("{err:?}"))))?;
+        let ws = WebSocket::try_from(raw.clone())
             .map_err(|err| Box::new(RpcError::RpcRequestError(err.to_string())))?;
         let (mut write, mut read) = ws.split();
 
@@ -73,35 +75,35 @@ impl PubsubProvider {
                     break;
                 }
             }
+            let _ = raw.close();
         });
 
         // Reader task: routes inbound frames to pending requests or live subscriptions.
-        let reader_inner = Rc::clone(&inner);
+        let reader_inner = Rc::downgrade(&inner);
         spawn_local(async move {
             while let Some(msg) = read.next().await {
-                match msg {
-                    Ok(Message::Text(text)) => {
-                        if let Ok(value) = serde_json::from_str::<Value>(&text) {
-                            dispatch_message(&reader_inner, value);
-                        }
-                    }
-                    Ok(Message::Bytes(_)) => {}
-                    Err(_) => break,
+                if let Ok(Message::Text(text)) = msg
+                    && let Some(inner) = reader_inner.upgrade()
+                    && let Ok(value) = serde_json::from_str::<Value>(&text)
+                {
+                    dispatch_message(&inner, value);
                 }
             }
-            // Connection closed: fail any in-flight requests and every live
+            // Connection closed or client dropped: fail any in-flight requests and every live
             // subscription with the same error so consumers can distinguish a
             // disconnect from a normal end-of-stream.
-            let disconnect_err = || -> Box<RpcError> {
-                Box::new(RpcError::RpcRequestError(
-                    "websocket connection closed".into(),
-                ))
-            };
-            for (_, tx) in reader_inner.pending.borrow_mut().drain() {
-                let _ = tx.send(Err(disconnect_err()));
-            }
-            for (_, tx) in reader_inner.subscriptions.borrow_mut().drain() {
-                let _ = tx.unbounded_send(Err(disconnect_err()));
+            if let Some(inner) = reader_inner.upgrade() {
+                let disconnect_err = || -> Box<RpcError> {
+                    Box::new(RpcError::RpcRequestError(
+                        "websocket connection closed".into(),
+                    ))
+                };
+                for (_, tx) in inner.pending.borrow_mut().drain() {
+                    let _ = tx.send(Err(disconnect_err()));
+                }
+                for (_, tx) in inner.subscriptions.borrow_mut().drain() {
+                    let _ = tx.unbounded_send(Err(disconnect_err()));
+                }
             }
         });
 
