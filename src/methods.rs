@@ -1,3 +1,5 @@
+#[cfg(feature = "check_address")]
+use std::str::FromStr;
 use {
     crate::WasmClient,
     serde_json::json,
@@ -48,11 +50,11 @@ impl WasmClient {
     /// Fetch the lamport balance of an account.
     pub async fn get_balance(
         &self,
-        address: impl AsRef<str>,
+        address: impl CheckAddress,
         config: Option<RpcContextConfig>,
     ) -> RpcResult<Response<u64>> {
         self.provider
-            .send(RpcRequest::GetBalance, json!([address.as_ref(), config]))
+            .send(RpcRequest::GetBalance, json!([&address.parse()?, config]))
             .await
     }
 
@@ -576,3 +578,28 @@ impl WasmClient {
             .await
     }
 }
+
+/// When feature `checked_address` is enabled, the address is parsed
+/// and an error is returned. [CheckAddress] is implemented for
+/// `&str], `&String`, `String` and `Cow<'_,str>` so these types should work automatically
+pub trait CheckAddress: AsRef<str> {
+    #[cfg(not(feature = "check_address"))]
+    fn parse(&self) -> RpcResult<String> {
+        Ok(self.as_ref().to_string())
+    }
+
+    /// Default parsing implementation
+    #[cfg(feature = "check_address")]
+    fn parse(&self) -> RpcResult<String> {
+        Address::from_str(self.as_ref())
+            .or(Err(Box::new(RpcError::ParseError(
+                "Invalid address".to_string(),
+            ))))
+            .map(|parsed_address| parsed_address.to_string())
+    }
+}
+
+impl CheckAddress for &str {}
+impl CheckAddress for &String {}
+impl CheckAddress for String {}
+impl CheckAddress for std::borrow::Cow<'_, str> {}
