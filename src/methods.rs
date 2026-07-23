@@ -1,3 +1,5 @@
+#[cfg(feature = "check_address")]
+use std::str::FromStr;
 use {
     crate::WasmClient,
     serde_json::json,
@@ -26,6 +28,7 @@ use {
     solana_transaction_status_client_types::{
         EncodedConfirmedTransactionWithStatusMeta, TransactionStatus,
     },
+    std::borrow::Cow,
 };
 
 type RpcResult<T> = Result<T, Box<RpcError>>;
@@ -48,11 +51,11 @@ impl WasmClient {
     /// Fetch the lamport balance of an account.
     pub async fn get_balance(
         &self,
-        address: impl AsRef<str>,
+        address: impl CheckAddress,
         config: Option<RpcContextConfig>,
     ) -> RpcResult<Response<u64>> {
         self.provider
-            .send(RpcRequest::GetBalance, json!([address.as_ref(), config]))
+            .send(RpcRequest::GetBalance, json!([&address.parse()?, config]))
             .await
     }
 
@@ -574,5 +577,41 @@ impl WasmClient {
         self.provider
             .send(RpcRequest::GetSupply, json!([config]))
             .await
+    }
+}
+
+/// When feature `checked_address` is enabled, the address is parsed
+/// and an error is returned. [CheckAddress] is implemented for
+/// `&str], `&String`, `String` and `Cow<'_,str>` so these types should work automatically
+pub trait CheckAddress {
+    fn parse(&self) -> RpcResult<Cow<'_, str>>;
+}
+
+macro_rules! impl_check_address_str {
+    ($($t:ty),*) => {$(
+        impl CheckAddress for $t {
+            #[cfg(not(feature = "check_address"))]
+            fn parse(&self) -> RpcResult<Cow<'_, str>> {
+                let s: &str = self.as_ref();
+                Ok(s.into())
+            }
+
+            #[cfg(feature = "check_address")]
+            fn parse(&self) -> RpcResult<Cow<'_, str>> {
+                let s: &str = self.as_ref();
+                Address::from_str(s).or(Err(Box::new(RpcError::ParseError(
+                    "Invalid address".to_string(),
+                ))))?;
+                Ok(s.into())
+            }
+        }
+    )*};
+}
+
+impl_check_address_str!(&str, &String, String, Cow<'_, str>);
+
+impl CheckAddress for &Address {
+    fn parse(&self) -> RpcResult<Cow<'_, str>> {
+        Ok(self.to_string().into())
     }
 }

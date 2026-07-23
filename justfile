@@ -23,3 +23,5 @@ test:
 		sleep 0.1
 	done
 	cargo test --target wasm32-unknown-unknown --tests --all-features
+	# Test with `check_address` disabled
+	cargo test --target wasm32-unknown-unknown --tests --features pubsub

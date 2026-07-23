@@ -15,7 +15,9 @@ categories = ["wasm", "web-programming"]
 crate-type = ["rlib"]
 
 [features]
+default = ["check_address"]
 pubsub = ["dep:wasm-bindgen-futures", "gloo-net/websocket"]
+check_address = []
 
 [dependencies]
 futures = "0.3"
