@@ -28,6 +28,7 @@ use {
     solana_transaction_status_client_types::{
         EncodedConfirmedTransactionWithStatusMeta, TransactionStatus,
     },
+    std::borrow::Cow,
 };
 
 type RpcResult<T> = Result<T, Box<RpcError>>;
@@ -582,24 +583,35 @@ impl WasmClient {
 /// When feature `checked_address` is enabled, the address is parsed
 /// and an error is returned. [CheckAddress] is implemented for
 /// `&str], `&String`, `String` and `Cow<'_,str>` so these types should work automatically
-pub trait CheckAddress: AsRef<str> {
-    #[cfg(not(feature = "check_address"))]
-    fn parse(&self) -> RpcResult<String> {
-        Ok(self.as_ref().to_string())
-    }
-
-    /// Default parsing implementation
-    #[cfg(feature = "check_address")]
-    fn parse(&self) -> RpcResult<String> {
-        Address::from_str(self.as_ref())
-            .or(Err(Box::new(RpcError::ParseError(
-                "Invalid address".to_string(),
-            ))))
-            .map(|parsed_address| parsed_address.to_string())
-    }
+pub trait CheckAddress {
+    fn parse(&self) -> RpcResult<Cow<'_, str>>;
 }
 
-impl CheckAddress for &str {}
-impl CheckAddress for &String {}
-impl CheckAddress for String {}
-impl CheckAddress for std::borrow::Cow<'_, str> {}
+macro_rules! impl_check_address_str {
+    ($($t:ty),*) => {$(
+        impl CheckAddress for $t {
+            #[cfg(not(feature = "check_address"))]
+            fn parse(&self) -> RpcResult<Cow<'_, str>> {
+                let s: &str = self.as_ref();
+                Ok(s.into())
+            }
+
+            #[cfg(feature = "check_address")]
+            fn parse(&self) -> RpcResult<Cow<'_, str>> {
+                let s: &str = self.as_ref();
+                Address::from_str(s).or(Err(Box::new(RpcError::ParseError(
+                    "Invalid address".to_string(),
+                ))))?;
+                Ok(s.into())
+            }
+        }
+    )*};
+}
+
+impl_check_address_str!(&str, &String, String, Cow<'_, str>);
+
+impl CheckAddress for &Address {
+    fn parse(&self) -> RpcResult<Cow<'_, str>> {
+        Ok(self.to_string().into())
+    }
+}
