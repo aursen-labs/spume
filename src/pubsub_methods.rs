@@ -1,7 +1,6 @@
 use {
-    crate::{WasmPubsubClient, pubsub_provider::Subscription},
+    crate::{WasmPubsubClient, methods::CheckAddress, pubsub_provider::Subscription},
     serde_json::json,
-    solana_address::Address,
     solana_rpc_client_types::{
         config::{
             RpcAccountInfoConfig, RpcBlockSubscribeConfig, RpcBlockSubscribeFilter,
@@ -22,14 +21,14 @@ impl WasmPubsubClient {
     /// Subscribe to changes of a given account's lamports or data.
     pub async fn account_subscribe(
         &self,
-        address: &Address,
+        address: impl CheckAddress,
         config: Option<RpcAccountInfoConfig>,
     ) -> SubResult<Response<Option<UiAccount>>> {
         self.provider
             .subscribe(
                 "accountSubscribe",
                 "accountUnsubscribe",
-                json!([address.to_string(), config]),
+                json!([address.parse()?, config]),
             )
             .await
     }
@@ -63,14 +62,14 @@ impl WasmPubsubClient {
     /// Subscribe to account changes for accounts owned by the given program.
     pub async fn program_subscribe(
         &self,
-        program_id: &Address,
+        program_id: impl CheckAddress,
         config: Option<RpcProgramAccountsConfig>,
     ) -> SubResult<Response<RpcKeyedAccount>> {
         self.provider
             .subscribe(
                 "programSubscribe",
                 "programUnsubscribe",
-                json!([program_id.to_string(), config]),
+                json!([program_id.parse()?, config]),
             )
             .await
     }

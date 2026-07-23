@@ -31,7 +31,7 @@ let version = client.get_version().await?;
 let latest  = client.get_latest_blockhash(None).await?;
 ```
 
-Address-taking methods (e.g. `get_balance`, `get_account_info`) take `&Address`:
+Address-taking methods (e.g. `get_balance`, `get_account_info`) take any `impl CheckAddress` such as `&Address`:
 
 ```rust
 use solana_address::address;

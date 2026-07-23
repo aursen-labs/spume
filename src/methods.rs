@@ -37,13 +37,13 @@ impl WasmClient {
     /// Fetch all information associated with the account of the given address.
     pub async fn get_account_info(
         &self,
-        address: &Address,
+        address: impl CheckAddress,
         config: Option<RpcAccountInfoConfig>,
     ) -> RpcResult<Response<Option<UiAccount>>> {
         self.provider
             .send(
                 RpcRequest::GetAccountInfo,
-                json!([address.to_string(), config]),
+                json!([address.parse()?, config]),
             )
             .await
     }
@@ -84,12 +84,15 @@ impl WasmClient {
     }
 
     /// Fetch info for several accounts in a single request.
-    pub async fn get_multiple_accounts(
+    pub async fn get_multiple_accounts<T: CheckAddress>(
         &self,
-        addresses: &[Address],
+        addresses: &[T],
         config: Option<RpcAccountInfoConfig>,
     ) -> RpcResult<Response<Vec<Option<UiAccount>>>> {
-        let addresses: Vec<String> = addresses.iter().map(Address::to_string).collect();
+        let addresses: Vec<Cow<'_, str>> = addresses
+            .iter()
+            .map(CheckAddress::parse)
+            .collect::<RpcResult<_>>()?;
         self.provider
             .send(RpcRequest::GetMultipleAccounts, json!([addresses, config]))
             .await
@@ -98,13 +101,13 @@ impl WasmClient {
     /// Fetch all accounts owned by the given program, optionally filtered.
     pub async fn get_program_accounts(
         &self,
-        program_id: &Address,
+        program_id: impl CheckAddress,
         config: Option<RpcProgramAccountsConfig>,
     ) -> RpcResult<OptionalContext<Vec<RpcKeyedAccount>>> {
         self.provider
             .send(
                 RpcRequest::GetProgramAccounts,
-                json!([program_id.to_string(), config]),
+                json!([program_id.parse()?, config]),
             )
             .await
     }
@@ -112,13 +115,13 @@ impl WasmClient {
     /// Return the SPL token balance held by a token account.
     pub async fn get_token_account_balance(
         &self,
-        account: &Address,
+        account: impl CheckAddress,
         config: Option<RpcContextConfig>,
     ) -> RpcResult<Response<UiTokenAmount>> {
         self.provider
             .send(
                 RpcRequest::GetTokenAccountBalance,
-                json!([account.to_string(), config]),
+                json!([account.parse()?, config]),
             )
             .await
     }
@@ -126,14 +129,14 @@ impl WasmClient {
     /// Fetch SPL token accounts delegated to the given address.
     pub async fn get_token_accounts_by_delegate(
         &self,
-        delegate: &Address,
+        delegate: impl CheckAddress,
         filter: RpcTokenAccountsFilter,
         config: Option<RpcAccountInfoConfig>,
     ) -> RpcResult<Response<Vec<RpcKeyedAccount>>> {
         self.provider
             .send(
                 RpcRequest::GetTokenAccountsByDelegate,
-                json!([delegate.to_string(), filter, config]),
+                json!([delegate.parse()?, filter, config]),
             )
             .await
     }
@@ -141,14 +144,14 @@ impl WasmClient {
     /// Fetch SPL token accounts owned by the given address.
     pub async fn get_token_accounts_by_owner(
         &self,
-        owner: &Address,
+        owner: impl CheckAddress,
         filter: RpcTokenAccountsFilter,
         config: Option<RpcAccountInfoConfig>,
     ) -> RpcResult<Response<Vec<RpcKeyedAccount>>> {
         self.provider
             .send(
                 RpcRequest::GetTokenAccountsByOwner,
-                json!([owner.to_string(), filter, config]),
+                json!([owner.parse()?, filter, config]),
             )
             .await
     }
@@ -156,13 +159,13 @@ impl WasmClient {
     /// Return the 20 largest token accounts for a given mint.
     pub async fn get_token_largest_accounts(
         &self,
-        mint: &Address,
+        mint: impl CheckAddress,
         config: Option<CommitmentConfig>,
     ) -> RpcResult<Response<Vec<RpcTokenAccountBalance>>> {
         self.provider
             .send(
                 RpcRequest::GetTokenLargestAccounts,
-                json!([mint.to_string(), config]),
+                json!([mint.parse()?, config]),
             )
             .await
     }
@@ -170,13 +173,13 @@ impl WasmClient {
     /// Return the total supply of an SPL token mint.
     pub async fn get_token_supply(
         &self,
-        mint: &Address,
+        mint: impl CheckAddress,
         config: Option<CommitmentConfig>,
     ) -> RpcResult<Response<UiTokenAmount>> {
         self.provider
             .send(
                 RpcRequest::GetTokenSupply,
-                json!([mint.to_string(), config]),
+                json!([mint.parse()?, config]),
             )
             .await
     }
@@ -224,13 +227,13 @@ impl WasmClient {
     /// Return confirmed transaction signatures involving the given address, most recent first.
     pub async fn get_signatures_for_address(
         &self,
-        address: &Address,
+        address: impl CheckAddress,
         config: Option<RpcSignaturesForAddressConfig>,
     ) -> RpcResult<Vec<RpcConfirmedTransactionStatusWithSignature>> {
         self.provider
             .send(
                 RpcRequest::GetSignaturesForAddress,
-                json!([address.to_string(), config]),
+                json!([address.parse()?, config]),
             )
             .await
     }
@@ -281,14 +284,14 @@ impl WasmClient {
     /// Request an airdrop of lamports to an address (devnet/testnet only). Returns the signature.
     pub async fn request_airdrop(
         &self,
-        address: &Address,
+        address: impl CheckAddress,
         lamports: u64,
         config: Option<RpcRequestAirdropConfig>,
     ) -> RpcResult<String> {
         self.provider
             .send(
                 RpcRequest::RequestAirdrop,
-                json!([address.to_string(), lamports, config]),
+                json!([address.parse()?, lamports, config]),
             )
             .await
     }
