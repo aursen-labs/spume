@@ -177,10 +177,7 @@ impl WasmClient {
         config: Option<CommitmentConfig>,
     ) -> RpcResult<Response<UiTokenAmount>> {
         self.provider
-            .send(
-                RpcRequest::GetTokenSupply,
-                json!([mint.parse()?, config]),
-            )
+            .send(RpcRequest::GetTokenSupply, json!([mint.parse()?, config]))
             .await
     }
 
