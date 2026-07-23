@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-23
+
+### Added
+
+- Added the `CheckAddress` trait for parsing and validating addresses ([#31](https://github.com/aursen-labs/spume/pull/31)).
+
+### Changed
+
+- Accept `impl AsRef<str>` in address-taking APIs for better dev UX with frontends ([#27](https://github.com/aursen-labs/spume/pull/27)).
+- Reworked address handling to use the `CheckAddress` trait ([#32](https://github.com/aursen-labs/spume/pull/32)).
+- Dropped the `http` crate in favor of a raw `u16` status check ([#26](https://github.com/aursen-labs/spume/pull/26)).
+- Dropped the redundant `Content-Length` size pre-check ([#25](https://github.com/aursen-labs/spume/pull/25)).
+- Updated dependencies ([#30](https://github.com/aursen-labs/spume/pull/30)).
+
+### Fixed
+
+- Fixed a memory and connection leak in the WebSockets client ([#29](https://github.com/aursen-labs/spume/pull/29)).
+
 ## [0.2.0] - 2026-05-19
 
 ### Added
@@ -33,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release.
 
-[Unreleased]: https://github.com/aursen-labs/spume/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/aursen-labs/spume/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/aursen-labs/spume/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/aursen-labs/spume/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/aursen-labs/spume/releases/tag/v0.1.0
