@@ -21,6 +21,7 @@ use {
         task::{Context, Poll},
         time::Duration,
     },
+    wasm_bindgen::{JsCast, closure::Closure},
     wasm_bindgen_futures::spawn_local,
 };
 
@@ -32,7 +33,6 @@ const RETRY_MAX: Duration = Duration::from_secs(8);
 /// Browsers surface a refused connection quickly, but a black-holed host can
 /// hang there indefinitely.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
-const CONNECT_POLL: Duration = Duration::from_millis(25);
 
 type PendingMap = RefCell<HashMap<u64, oneshot::Sender<Result<Value, Box<RpcError>>>>>;
 type Socket = (
@@ -258,16 +258,57 @@ async fn run_session(
 }
 
 /// Wait for the handshake to settle; `false` if it failed or timed out.
+///
+/// Event-driven: resolves on the first `open`, `error` or `close` event
+/// rather than polling `ready_state`. `add_event_listener` is used rather
+/// than the `on*` properties so gloo-net's own handlers are never clobbered.
 async fn wait_open(raw: &web_sys::WebSocket) -> bool {
-    let mut waited = Duration::ZERO;
-    while raw.ready_state() == web_sys::WebSocket::CONNECTING {
-        if waited >= CONNECT_TIMEOUT {
-            return false;
-        }
-        sleep(CONNECT_POLL).await;
-        waited += CONNECT_POLL;
+    // Fast path, and a guard against an event that fired before the
+    // listeners below were registered.
+    match raw.ready_state() {
+        web_sys::WebSocket::OPEN => return true,
+        web_sys::WebSocket::CLOSING | web_sys::WebSocket::CLOSED => return false,
+        _ => {}
     }
-    raw.ready_state() == web_sys::WebSocket::OPEN
+
+    let (tx, rx) = oneshot::channel::<bool>();
+    let tx = Rc::new(RefCell::new(Some(tx)));
+
+    let on_open = handshake_listener(raw, "open", &tx, true);
+    let on_error = handshake_listener(raw, "error", &tx, false);
+    let on_close = handshake_listener(raw, "close", &tx, false);
+
+    let timeout = sleep(CONNECT_TIMEOUT);
+    futures::pin_mut!(timeout);
+    let opened = match future::select(rx, timeout).await {
+        Either::Left((result, _)) => result.unwrap_or(false),
+        Either::Right(((), _)) => false,
+    };
+
+    let _ = raw.remove_event_listener_with_callback("open", on_open.as_ref().unchecked_ref());
+    let _ = raw.remove_event_listener_with_callback("error", on_error.as_ref().unchecked_ref());
+    let _ = raw.remove_event_listener_with_callback("close", on_close.as_ref().unchecked_ref());
+    opened
+}
+
+/// Registers a one-shot listener that resolves the handshake wait; the first
+/// event to fire wins.
+fn handshake_listener(
+    raw: &web_sys::WebSocket,
+    event: &str,
+    tx: &Rc<RefCell<Option<oneshot::Sender<bool>>>>,
+    ok: bool,
+) -> Closure<dyn FnMut(web_sys::Event)> {
+    let tx = Rc::clone(tx);
+    let listener = Closure::once(move |_: web_sys::Event| {
+        if let Some(tx) = tx.borrow_mut().take() {
+            let _ = tx.send(ok);
+        }
+    });
+    // Registration cannot realistically fail; if it does, the caller simply
+    // falls back to the CONNECT_TIMEOUT path.
+    let _ = raw.add_event_listener_with_callback(event, listener.as_ref().unchecked_ref());
+    listener
 }
 
 /// Close the socket, keeping the gloo-net wrapper alive until the close event

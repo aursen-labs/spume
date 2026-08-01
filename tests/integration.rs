@@ -16,8 +16,9 @@ use {
     spume::WasmPubsubClient,
 };
 use {
+    solana_account_decoder_client_types::UiAccountEncoding,
     solana_address::{Address, address},
-    solana_rpc_client_types::config::{CommitmentConfig, RpcContextConfig},
+    solana_rpc_client_types::config::{CommitmentConfig, RpcAccountInfoConfig, RpcContextConfig},
     spume::WasmClient,
     wasm_bindgen_test::wasm_bindgen_test,
 };
@@ -56,6 +57,44 @@ async fn http_max_response_size_rejects_oversized() {
     assert!(
         msg.contains("response body too large"),
         "unexpected error: {msg}"
+    );
+}
+
+/// A body spanning several stream chunks must accumulate correctly, and be
+/// rejected mid-read once it passes the cap.
+#[wasm_bindgen_test]
+async fn http_max_response_size_handles_multi_chunk_body() {
+    let config = || {
+        Some(RpcAccountInfoConfig {
+            encoding: Some(UiAccountEncoding::Base64),
+            ..Default::default()
+        })
+    };
+    // The token program account is ~175 KiB of base64.
+    let token_program = address!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+
+    let client = WasmClient::new(RPC_URL);
+    let account = client
+        .get_account_info(&token_program, config())
+        .await
+        .expect("getAccountInfo failed")
+        .value
+        .expect("token program should exist");
+    assert!(
+        account
+            .data
+            .decode()
+            .is_some_and(|data| data.len() > 64 * 1024)
+    );
+
+    let capped = WasmClient::new(RPC_URL).with_max_response_size(64 * 1024);
+    let err = capped
+        .get_account_info(&token_program, config())
+        .await
+        .expect_err("expected size-limit rejection, got Ok");
+    assert!(
+        err.to_string().contains("response body too large"),
+        "unexpected error: {err}"
     );
 }
 

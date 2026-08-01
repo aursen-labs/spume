@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Subscription streams now yield one `Err` per disconnect and resume instead of ending, and `Subscription::id` returns a stable client-side id rather than the server's ([#37](https://github.com/aursen-labs/spume/pull/37)).
 
+### Fixed
+
+- `with_max_response_size` now streams the response body and cancels the transfer once the cap is passed, instead of buffering the whole body before rejecting it ([#38](https://github.com/aursen-labs/spume/pull/38)).
+
 ## [0.3.1] - 2026-08-01
 
 ### Changed

@@ -16,7 +16,7 @@ crate-type = ["rlib"]
 
 [features]
 default = ["check_address"]
-pubsub = ["dep:wasm-bindgen-futures", "gloo-net/websocket"]
+pubsub = ["gloo-net/websocket"]
 check_address = []
 
 [dependencies]
@@ -27,6 +27,7 @@ gloo-net = { version = "0.7.0", default-features = false, features = [
     "json",
 ] }
 gloo-timers = { version = "0.4", features = ["futures"] }
+js-sys = "0.3"
 serde = "1"
 serde_json = "1"
 solana-address = "~2.6.1"
@@ -38,11 +39,16 @@ solana-rpc-client-types = "~4.1.2"
 solana-short-vec = "~3.2.2"
 solana-signature = "~3.4.1"
 solana-transaction-status-client-types = "4.1.2"
-wasm-bindgen-futures = { version = "0.4", optional = true }
-web-sys = { version = "0.3", features = ["AbortController", "WebSocket"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = [
+    "AbortController",
+    "ReadableStream",
+    "ReadableStreamDefaultReader",
+    "WebSocket",
+] }
 
 [dev-dependencies]
-js-sys = "0.3"
 solana-account-decoder-client-types = "4.1"
 wasm-bindgen-test = "0.3"
 
