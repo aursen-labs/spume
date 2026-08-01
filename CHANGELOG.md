@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-08-01
+
+### Changed
+
+- Constrained the Solana dependencies to patch ranges so newer releases can't break the `wasm32-unknown-unknown` build, and committed `Cargo.lock` ([#35](https://github.com/aursen-labs/spume/pull/35)).
+
 ## [0.3.0] - 2026-07-23
 
 ### Added
@@ -51,7 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release.
 
-[Unreleased]: https://github.com/aursen-labs/spume/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/aursen-labs/spume/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/aursen-labs/spume/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/aursen-labs/spume/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/aursen-labs/spume/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/aursen-labs/spume/releases/tag/v0.1.0
