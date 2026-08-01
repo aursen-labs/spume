@@ -1,8 +1,5 @@
 //! Rough timings against a local `surfpool` validator (`just bench`).
 //!
-//! ponytail: no criterion — it doesn't run on wasm32. `Date::now()` ms
-//! resolution is plenty when every sample is a batch of round trips.
-//!
 //! Latency here is mostly surfpool, not spume. The benches that say something
 //! about *this crate* are the parse-heavy ones (`token_program`,
 //! `multiple_accounts`), where deserializing the body dwarfs the round trip.
@@ -31,9 +28,6 @@ const SYSTEM_PROGRAM: Address = address!("11111111111111111111111111111111");
 const TOKEN_PROGRAM: Address = address!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 /// Run `f` `iters` times sequentially, print total and per-call average in ms.
-///
-/// ponytail: no per-call min/max — a single localhost round trip is under
-/// `Date::now()`'s 1ms resolution, so only the aggregate means anything.
 async fn bench<F, Fut>(name: &str, iters: u32, f: F)
 where
     F: Fn() -> Fut,
