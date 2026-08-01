@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added automatic reconnection to the pubsub client, re-issuing live subscriptions so their streams survive a dropped connection ([#37](https://github.com/aursen-labs/spume/pull/37)).
+
+### Changed
+
+- Subscription streams now yield one `Err` per disconnect and resume instead of ending, and `Subscription::id` returns a stable client-side id rather than the server's ([#37](https://github.com/aursen-labs/spume/pull/37)).
+
 ## [0.3.1] - 2026-08-01
 
 ### Changed
