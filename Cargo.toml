@@ -1,6 +1,6 @@
 [package]
 name = "spume"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 description = "Lightweight, ergonomic Solana JSON-RPC wasm client"
 license = "Apache-2.0"
@@ -29,11 +29,15 @@ gloo-net = { version = "0.7.0", default-features = false, features = [
 gloo-timers = { version = "0.4", features = ["futures"] }
 serde = "1"
 serde_json = "1"
-solana-address = "2"
+solana-address = "~2.6.1"
 solana-epoch-info = { version = "3.1", features = ["serde"] }
-solana-epoch-schedule = { version = "3.1", features = ["serde"] }
-solana-rpc-client-types = "4.1.1"
-solana-transaction-status-client-types = "4.1.1"
+solana-epoch-schedule = { version = "~3.2.0", features = ["serde"] }
+solana-hash = "~4.4.0"
+solana-reward-info = "~6.2.0"
+solana-rpc-client-types = "~4.1.2"
+solana-short-vec = "~3.2.2"
+solana-signature = "~3.4.1"
+solana-transaction-status-client-types = "4.1.2"
 wasm-bindgen-futures = { version = "0.4", optional = true }
 web-sys = { version = "0.3", features = ["AbortController", "WebSocket"] }
 
