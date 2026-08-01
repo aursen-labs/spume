@@ -43,7 +43,7 @@ web-sys = { version = "0.3", features = ["AbortController", "WebSocket"] }
 
 [dev-dependencies]
 js-sys = "0.3"
-solana-account-decoder-client-types = "4.1.2"
+solana-account-decoder-client-types = "4.1"
 wasm-bindgen-test = "0.3"
 
 [package.metadata.docs.rs]
