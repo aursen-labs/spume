@@ -7,9 +7,9 @@ clippy:
 # Run wasm integration tests against a fresh surfpool instance.
 # Requires: surfpool, wasm-bindgen-test-runner, Node.
 test: (_with-surfpool "
-	cargo test --target wasm32-unknown-unknown --test integration --all-features
+	cargo test --target wasm32-unknown-unknown --lib --test integration --all-features
 	# Test with `check_address` disabled
-	cargo test --target wasm32-unknown-unknown --test integration --features pubsub
+	cargo test --target wasm32-unknown-unknown --lib --test integration --features pubsub
 ")
 
 # Print rough RPC timings against a fresh surfpool instance.
