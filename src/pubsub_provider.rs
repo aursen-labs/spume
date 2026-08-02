@@ -76,7 +76,7 @@ impl PubsubInner {
             pending: RefCell::new(HashMap::new()),
             subscriptions: RefCell::new(HashMap::new()),
             server_ids: RefCell::new(HashMap::new()),
-            connected: Cell::new(true),
+            connected: Cell::new(false),
             next_id: Cell::new(0),
             request_timeout: Cell::new(REQUEST_TIMEOUT),
         }
@@ -143,6 +143,8 @@ impl PubsubProvider {
 
     /// Returns `true` if a WebSocket connection is currently established.
     ///
+    /// Starts out `false`: [`connect`](Self::connect) returns while the socket
+    /// is still handshaking, so this only flips once the connection is open.
     /// `false` is not terminal — the provider keeps trying to reconnect.
     pub fn is_connected(&self) -> bool {
         self.inner.connected.get()
@@ -615,6 +617,7 @@ mod tests {
     fn disconnect_keeps_subscriptions_and_fails_requests() {
         let (out_tx, mut out_rx) = mpsc::unbounded::<Message>();
         let inner = Rc::new(PubsubInner::new(out_tx));
+        inner.connected.set(true);
 
         let (notify_tx, mut notify_rx) = mpsc::unbounded();
         inner.subscriptions.borrow_mut().insert(

@@ -161,7 +161,10 @@ impl WasmPubsubClient {
         self
     }
 
-    /// Returns `true` if the underlying WebSocket connection is still open.
+    /// Returns `true` if the underlying WebSocket connection is open.
+    ///
+    /// Starts out `false`: [`connect`](Self::connect) returns while the socket
+    /// is still handshaking, so this only flips once the connection is open.
     pub fn is_connected(&self) -> bool {
         self.provider.is_connected()
     }

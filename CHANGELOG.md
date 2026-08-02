@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `is_connected` no longer reports `true` while the initial handshake is still in flight; it starts `false` and flips once the socket opens ([#42](https://github.com/aursen-labs/spume/pull/42)).
 - `with_max_response_size` now streams the response body and cancels the transfer once the cap is passed, instead of buffering the whole body before rejecting it ([#38](https://github.com/aursen-labs/spume/pull/38)).
 
 ## [0.3.1] - 2026-08-01
