@@ -1584,6 +1584,7 @@ dependencies = [
  "solana-short-vec",
  "solana-signature",
  "solana-transaction-status-client-types",
+ "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "web-sys",

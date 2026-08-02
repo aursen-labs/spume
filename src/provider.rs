@@ -3,13 +3,18 @@ use {
         future::{Either, select},
         pin_mut,
     },
-    gloo_net::http::{Method as HttpMethod, RequestBuilder},
+    gloo_net::http::{Method as HttpMethod, RequestBuilder, Response},
     gloo_timers::future::TimeoutFuture,
+    js_sys::{Reflect, Uint8Array},
     serde::{Deserialize, de::DeserializeOwned},
     serde_json::Value,
     solana_rpc_client_types::request::{RpcError, RpcRequest, RpcResponseErrorData},
     std::{cell::Cell, rc::Rc},
-    web_sys::{AbortController, wasm_bindgen::UnwrapThrowExt},
+    wasm_bindgen_futures::JsFuture,
+    web_sys::{
+        AbortController, ReadableStreamDefaultReader,
+        wasm_bindgen::{JsCast, JsValue, UnwrapThrowExt},
+    },
 };
 
 #[derive(Deserialize)]
@@ -116,18 +121,7 @@ impl HttpProvider {
         let status = response.status();
         let is_success = (200..300).contains(&status);
 
-        let text = response
-            .text()
-            .await
-            .map_err(|err| Box::new(RpcError::RpcRequestError(err.to_string())))?;
-
-        if text.len() > self.max_response_size {
-            return Err(Box::new(RpcError::RpcRequestError(format!(
-                "response body too large: {} bytes (limit: {})",
-                text.len(),
-                self.max_response_size
-            ))));
-        }
+        let text = read_body_capped(&response, self.max_response_size).await?;
 
         let response_json = match serde_json::from_str::<Value>(&text) {
             Ok(response_json) => response_json,
@@ -165,6 +159,49 @@ impl HttpProvider {
         self.id.set(id);
         id
     }
+}
+
+/// Read the body chunk by chunk, aborting as soon as it passes `limit`.
+async fn read_body_capped(response: &Response, limit: usize) -> Result<String, Box<RpcError>> {
+    let js_error =
+        |err: JsValue| -> Box<RpcError> { Box::new(RpcError::RpcRequestError(format!("{err:?}"))) };
+
+    let Some(body) = response.body() else {
+        return Ok(String::new());
+    };
+    let reader: ReadableStreamDefaultReader = body.get_reader().unchecked_into();
+
+    let mut buf: Vec<u8> = Vec::new();
+    loop {
+        let chunk = JsFuture::from(reader.read()).await.map_err(js_error)?;
+        let done = Reflect::get(&chunk, &JsValue::from_str("done"))
+            .map_err(js_error)?
+            .as_bool()
+            .unwrap_or(true);
+        if done {
+            break;
+        }
+
+        let bytes: Uint8Array = Reflect::get(&chunk, &JsValue::from_str("value"))
+            .map_err(js_error)?
+            .unchecked_into();
+        let len = bytes.length() as usize;
+        if buf.len() + len > limit {
+            // Cancelling the body stream terminates the fetch, so the rest is
+            // never downloaded. Awaited so the promise rejection is consumed
+            // here rather than surfacing as an unhandled rejection.
+            let _ = JsFuture::from(reader.cancel()).await;
+            return Err(Box::new(RpcError::RpcRequestError(format!(
+                "response body too large: over {limit} bytes"
+            ))));
+        }
+
+        let offset = buf.len();
+        buf.resize(offset + len, 0);
+        bytes.copy_to(&mut buf[offset..]);
+    }
+
+    String::from_utf8(buf).map_err(|err| Box::new(RpcError::ParseError(err.to_string())))
 }
 
 pub(crate) fn parse_rpc_error(error: &Value) -> Box<RpcError> {

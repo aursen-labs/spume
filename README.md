@@ -54,7 +54,7 @@ let client = WasmClient::new("https://rpc.example.com")
     .with_max_response_size(50 * 1024 * 1024);
 ```
 
-Oversized responses are rejected with `RpcError::RpcRequestError("response body too large …")` — pre-flight via `Content-Length`, or post-read for chunked encoding.
+The body is read in chunks and the transfer is cancelled as soon as it passes the cap, so an oversized response is never fully buffered. It surfaces as `RpcError::RpcRequestError("response body too large …")`.
 
 ## WebSocket / PubSub usage
 
