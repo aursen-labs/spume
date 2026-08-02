@@ -13,13 +13,14 @@
 #[cfg(feature = "pubsub")]
 use {
     futures::stream::StreamExt, solana_rpc_client_types::config::RpcTransactionLogsFilter,
-    spume::WasmPubsubClient, std::time::Duration,
+    spume::WasmPubsubClient,
 };
 use {
     solana_account_decoder_client_types::UiAccountEncoding,
     solana_address::{Address, address},
     solana_rpc_client_types::config::{CommitmentConfig, RpcAccountInfoConfig, RpcContextConfig},
     spume::WasmClient,
+    std::time::Duration,
     wasm_bindgen_test::wasm_bindgen_test,
 };
 
@@ -95,6 +96,24 @@ async fn http_max_response_size_handles_multi_chunk_body() {
         .expect_err("expected size-limit rejection, got Ok");
     assert!(
         err.to_string().contains("response body too large"),
+        "unexpected error: {err}"
+    );
+}
+
+#[wasm_bindgen_test]
+async fn http_timeout_is_configurable() {
+    let client = WasmClient::new(RPC_URL).with_timeout(Duration::from_secs(5));
+    let result = client.get_health().await.expect("getHealth failed");
+    assert_eq!(result, "ok");
+
+    // A budget nothing can meet must fail rather than wait out the default 60 s.
+    let impatient = WasmClient::new(RPC_URL).with_timeout(Duration::ZERO);
+    let err = impatient
+        .get_health()
+        .await
+        .expect_err("expected a timeout, got Ok");
+    assert!(
+        err.to_string().contains("timed out"),
         "unexpected error: {err}"
     );
 }
@@ -276,4 +295,19 @@ async fn ws_request_timeout_is_configurable() {
         .with_request_timeout(Duration::from_secs(5));
 
     client.slot_subscribe().await.expect("slotSubscribe failed");
+}
+
+#[cfg(feature = "pubsub")]
+#[wasm_bindgen_test]
+async fn ws_client_clone_shares_the_connection() {
+    let client = WasmPubsubClient::connect(WS_URL).expect("WebSocket connect failed");
+    let clone = client.clone();
+    drop(client);
+
+    assert!(clone.is_connected(), "clone should still be connected");
+    let mut sub = clone.slot_subscribe().await.expect("slotSubscribe failed");
+    sub.next()
+        .await
+        .expect("subscription closed before any notification")
+        .expect("failed to deserialize SlotInfo");
 }

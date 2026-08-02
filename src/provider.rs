@@ -9,7 +9,7 @@ use {
     serde::{Deserialize, de::DeserializeOwned},
     serde_json::Value,
     solana_rpc_client_types::request::{RpcError, RpcRequest, RpcResponseErrorData},
-    std::{cell::Cell, rc::Rc},
+    std::{cell::Cell, rc::Rc, time::Duration},
     wasm_bindgen_futures::JsFuture,
     web_sys::{
         AbortController, ReadableStreamDefaultReader,
@@ -50,12 +50,18 @@ impl HttpProvider {
     #[must_use]
     pub fn new_with_timeout(url: impl ToString, timeout: u32) -> Self {
         Self {
-            url: url.to_string(),
             timeout,
-            id: Rc::new(Cell::new(0)),
-            headers: Vec::new(),
-            max_response_size: DEFAULT_MAX_RESPONSE_SIZE,
+            ..Self::new(url)
         }
+    }
+
+    /// Set how long a request waits for its response (default 60 s).
+    ///
+    /// Durations beyond `u32::MAX` milliseconds (~49 days) are clamped.
+    #[must_use]
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = u32::try_from(timeout.as_millis()).unwrap_or(u32::MAX);
+        self
     }
 
     /// Attach a custom header that will be sent with every request.
