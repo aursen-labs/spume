@@ -24,6 +24,14 @@ struct JsonRpcError {
     data: Option<Value>,
 }
 
+/// Deserialized straight into `R` — going through `Value` first would parse the
+/// body once, clone the `result` subtree, then walk it again.
+#[derive(Deserialize)]
+struct JsonRpcResponse<R> {
+    result: Option<R>,
+    error: Option<JsonRpcError>,
+}
+
 /// Default cap on response body size.
 const DEFAULT_MAX_RESPONSE_SIZE: usize = 10 * 1024 * 1024;
 
@@ -127,36 +135,28 @@ impl HttpProvider {
         let status = response.status();
         let is_success = (200..300).contains(&status);
 
-        let text = read_body_capped(&response, self.max_response_size).await?;
-
-        let response_json = match serde_json::from_str::<Value>(&text) {
-            Ok(response_json) => response_json,
-            Err(err) if is_success => {
-                return Err(Box::new(RpcError::ParseError(err.to_string())));
-            }
-            Err(_) => {
-                return Err(Box::new(RpcError::RpcRequestError(format!(
-                    "HTTP {status}: {text}"
-                ))));
-            }
+        let body = read_body_capped(&response, self.max_response_size).await?;
+        let http_error = || {
+            Box::new(RpcError::RpcRequestError(format!(
+                "HTTP {status}: {}",
+                String::from_utf8_lossy(&body)
+            )))
         };
 
-        if let Some(error) = response_json.get("error").filter(|error| !error.is_null()) {
-            return Err(parse_rpc_error(error));
-        }
-
-        if is_success {
-            serde_json::from_value(
-                response_json
-                    .get("result")
-                    .cloned()
-                    .ok_or_else(|| Box::new(RpcError::ParseError("result".to_string())))?,
-            )
-            .map_err(|err| Box::new(RpcError::ParseError(err.to_string())))
-        } else {
-            Err(Box::new(RpcError::RpcRequestError(format!(
-                "HTTP {status}: {text}"
-            ))))
+        match serde_json::from_slice::<JsonRpcResponse<R>>(&body) {
+            Ok(JsonRpcResponse {
+                error: Some(error), ..
+            }) => Err(Box::new(error.into_rpc_error())),
+            Ok(JsonRpcResponse {
+                result: Some(result),
+                ..
+            }) => Ok(result),
+            // No `result` and no `error`: only legal when the result itself is
+            // `null`, which some methods do return.
+            Ok(_) if is_success => serde_json::from_value(Value::Null)
+                .map_err(|_| Box::new(RpcError::ParseError("result".to_string()))),
+            Err(err) if is_success => Err(Box::new(RpcError::ParseError(err.to_string()))),
+            _ => Err(http_error()),
         }
     }
 
@@ -168,12 +168,15 @@ impl HttpProvider {
 }
 
 /// Read the body chunk by chunk, aborting as soon as it passes `limit`.
-async fn read_body_capped(response: &Response, limit: usize) -> Result<String, Box<RpcError>> {
+///
+/// Returns raw bytes: `serde_json` validates UTF-8 as it parses, so building a
+/// `String` first would walk the whole body an extra time.
+async fn read_body_capped(response: &Response, limit: usize) -> Result<Vec<u8>, Box<RpcError>> {
     let js_error =
         |err: JsValue| -> Box<RpcError> { Box::new(RpcError::RpcRequestError(format!("{err:?}"))) };
 
     let Some(body) = response.body() else {
-        return Ok(String::new());
+        return Ok(Vec::new());
     };
     let reader: ReadableStreamDefaultReader = body.get_reader().unchecked_into();
 
@@ -207,9 +210,12 @@ async fn read_body_capped(response: &Response, limit: usize) -> Result<String, B
         bytes.copy_to(&mut buf[offset..]);
     }
 
-    String::from_utf8(buf).map_err(|err| Box::new(RpcError::ParseError(err.to_string())))
+    Ok(buf)
 }
 
+// HTTP responses deserialize the error inline; only pubsub still routes an
+// already-parsed `Value` through here.
+#[cfg(feature = "pubsub")]
 pub(crate) fn parse_rpc_error(error: &Value) -> Box<RpcError> {
     Box::new(
         serde_json::from_value::<JsonRpcError>(error.clone())
