@@ -55,7 +55,7 @@ impl WasmClient {
         config: Option<RpcContextConfig>,
     ) -> RpcResult<Response<u64>> {
         self.provider
-            .send(RpcRequest::GetBalance, json!([&address.parse()?, config]))
+            .send(RpcRequest::GetBalance, json!([address.parse()?, config]))
             .await
     }
 
