@@ -425,9 +425,10 @@ fn resubscribe(inner: &Rc<PubsubInner>) {
                     entry.server_id = Some(server_id);
                     inner.server_ids.borrow_mut().insert(server_id, local_id);
                 }
-                Err(err) => {
+                Err(err) if inner.connected.get() => {
                     let _ = entry.tx.unbounded_send(Err(err));
                 }
+                Err(_) => {}
             }
         }
     });
@@ -667,5 +668,40 @@ mod tests {
 
         assert!(err.to_string().contains("timed out"), "unexpected: {err}");
         assert!(inner.pending.borrow().is_empty(), "pending entry leaked");
+    }
+
+    /// A socket that dies while a resubscribe is in flight is still one
+    /// disconnect, so the consumer must not hear about it twice.
+    #[wasm_bindgen_test]
+    async fn resubscribe_failing_on_a_dead_socket_reports_once() {
+        let (out_tx, mut out_rx) = mpsc::unbounded::<Message>();
+        let inner = Rc::new(PubsubInner::new(out_tx));
+        inner.connected.set(true);
+
+        let (notify_tx, mut notify_rx) = mpsc::unbounded();
+        inner.subscriptions.borrow_mut().insert(
+            1,
+            SubEntry {
+                tx: notify_tx,
+                subscribe_method: "slotSubscribe",
+                params: json!([]),
+                server_id: None,
+            },
+        );
+
+        resubscribe(&inner);
+        // Let the spawned task get its request in flight.
+        sleep(Duration::ZERO).await;
+        assert_eq!(inner.pending.borrow().len(), 1, "resubscribe never sent");
+
+        // Socket dies before the server answers: one `Err`, from `disconnected`.
+        disconnected(&inner, &mut out_rx);
+        sleep(Duration::ZERO).await;
+
+        assert!(
+            notify_rx.try_recv().is_ok(),
+            "expected the disconnect error"
+        );
+        assert!(notify_rx.try_recv().is_err(), "expected exactly one error");
     }
 }
