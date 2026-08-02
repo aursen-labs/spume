@@ -75,6 +75,21 @@ impl WasmClient {
         self
     }
 
+    /// Set how long a request waits for its response (default 60 s).
+    ///
+    /// Convenience pass-through to [`HttpProvider::with_timeout`].
+    ///
+    /// ```no_run
+    /// use {spume::WasmClient, std::time::Duration};
+    /// let client = WasmClient::new("https://rpc.example.com")
+    ///     .with_timeout(Duration::from_secs(10));
+    /// ```
+    #[must_use]
+    pub fn with_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.provider = self.provider.with_timeout(timeout);
+        self
+    }
+
     /// Set the maximum response body size in bytes (default 10 MiB).
     ///
     /// Responses larger than this limit are rejected with an error before
@@ -98,8 +113,12 @@ impl WasmClient {
 /// Opens the connection eagerly in [`connect`](Self::connect); the connection
 /// stays open for the lifetime of this client. Multiple subscriptions share
 /// the same socket.
+///
+/// Cloning is cheap and shares that one connection — supervision stops once
+/// the last clone is dropped.
 #[cfg(feature = "pubsub")]
 #[cfg_attr(docsrs, doc(cfg(feature = "pubsub")))]
+#[derive(Clone, Debug)]
 pub struct WasmPubsubClient {
     provider: PubsubProvider,
 }
