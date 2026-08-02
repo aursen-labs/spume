@@ -70,16 +70,17 @@ async fn http_max_response_size_handles_multi_chunk_body() {
             ..Default::default()
         })
     };
-    // The token program account is ~175 KiB of base64.
-    let token_program = address!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+    // The token program's ProgramData account holds the ELF: ~130 KiB of
+    // base64. The program account itself is only a 36-byte pointer to it.
+    let token_program_data = address!("3gvYRKWyXRR9xKWe1ZjPhLY5ZJRN7KDB4rFZFGoJfFk2");
 
     let client = WasmClient::new(RPC_URL);
     let account = client
-        .get_account_info(&token_program, config())
+        .get_account_info(&token_program_data, config())
         .await
         .expect("getAccountInfo failed")
         .value
-        .expect("token program should exist");
+        .expect("token program data should exist");
     assert!(
         account
             .data
@@ -89,7 +90,7 @@ async fn http_max_response_size_handles_multi_chunk_body() {
 
     let capped = WasmClient::new(RPC_URL).with_max_response_size(64 * 1024);
     let err = capped
-        .get_account_info(&token_program, config())
+        .get_account_info(&token_program_data, config())
         .await
         .expect_err("expected size-limit rejection, got Ok");
     assert!(
