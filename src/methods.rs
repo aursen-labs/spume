@@ -580,9 +580,10 @@ impl WasmClient {
     }
 }
 
-/// When feature `checked_address` is enabled, the address is parsed
-/// and an error is returned. [CheckAddress] is implemented for
-/// `&str], `&String`, `String` and `Cow<'_,str>` so these types should work automatically
+/// When feature `check_address` is enabled, the address is parsed and an
+/// error is returned if it is not a valid address. [CheckAddress] is
+/// implemented for `&str`, `&String`, `String` and `Cow<'_, str>`, so those
+/// types work automatically.
 pub trait CheckAddress {
     fn parse(&self) -> RpcResult<Cow<'_, str>>;
 }
