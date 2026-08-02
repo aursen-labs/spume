@@ -34,6 +34,11 @@ const RETRY_MAX: Duration = Duration::from_secs(8);
 /// hang there indefinitely.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Default for [`PubsubProvider::with_request_timeout`]. A socket that stays
+/// open but never answers would otherwise hang the caller forever. Matches the
+/// HTTP provider's default.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+
 type PendingMap = RefCell<HashMap<u64, oneshot::Sender<Result<Value, Box<RpcError>>>>>;
 type Socket = (
     SplitSink<WebSocket, Message>,
@@ -61,6 +66,7 @@ struct PubsubInner {
     server_ids: RefCell<HashMap<u64, u64>>,
     connected: Cell<bool>,
     next_id: Cell<u64>,
+    request_timeout: Cell<Duration>,
 }
 
 impl PubsubInner {
@@ -72,6 +78,7 @@ impl PubsubInner {
             server_ids: RefCell::new(HashMap::new()),
             connected: Cell::new(true),
             next_id: Cell::new(0),
+            request_timeout: Cell::new(REQUEST_TIMEOUT),
         }
     }
 
@@ -123,6 +130,15 @@ impl PubsubProvider {
     /// The endpoint URL this provider was opened with.
     pub fn url(&self) -> &str {
         &self.url
+    }
+
+    /// Set how long a request waits for its response (default 60 s).
+    ///
+    /// Applies to every clone of this provider — they share one connection.
+    #[must_use]
+    pub fn with_request_timeout(self, timeout: Duration) -> Self {
+        self.inner.request_timeout.set(timeout);
+        self
     }
 
     /// Returns `true` if a WebSocket connection is currently established.
@@ -447,7 +463,19 @@ async fn send_request(
         return Err(disconnect_error());
     }
 
-    rx.await.map_err(|_| disconnect_error())?
+    let limit = inner.request_timeout.get();
+    let timeout = sleep(limit);
+    futures::pin_mut!(timeout);
+    match future::select(rx, timeout).await {
+        Either::Left((result, _)) => result.map_err(|_| disconnect_error())?,
+        Either::Right(((), _)) => {
+            inner.pending.borrow_mut().remove(&id);
+            Err(Box::new(RpcError::RpcRequestError(format!(
+                "`{method}` timed out after {} ms",
+                limit.as_millis()
+            ))))
+        }
+    }
 }
 
 /// Remove a subscription from the dispatcher; returns the server-side id if
@@ -621,5 +649,20 @@ mod tests {
         // Consumer is told once.
         assert!(notify_rx.try_recv().is_ok(), "expected a disconnect error");
         assert!(notify_rx.try_recv().is_err(), "expected exactly one error");
+    }
+
+    /// A frame that leaves but is never answered must fail, not hang.
+    #[wasm_bindgen_test]
+    async fn request_times_out_without_a_response() {
+        let (out_tx, _out_rx) = mpsc::unbounded::<Message>();
+        let inner = Rc::new(PubsubInner::new(out_tx));
+        inner.request_timeout.set(Duration::from_millis(20));
+
+        let err = send_request(&inner, "slotSubscribe", json!([]))
+            .await
+            .expect_err("expected a timeout, got Ok");
+
+        assert!(err.to_string().contains("timed out"), "unexpected: {err}");
+        assert!(inner.pending.borrow().is_empty(), "pending entry leaked");
     }
 }

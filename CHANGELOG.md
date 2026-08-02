@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added automatic reconnection to the pubsub client, re-issuing live subscriptions so their streams survive a dropped connection ([#37](https://github.com/aursen-labs/spume/pull/37)).
+- Added `WasmPubsubClient::with_request_timeout`, capping how long a pubsub request waits for its response (default 60 s) so a socket that stays open but never answers can no longer hang the caller ([#39](https://github.com/aursen-labs/spume/pull/39)).
 
 ### Changed
 

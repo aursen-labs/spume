@@ -13,7 +13,7 @@
 #[cfg(feature = "pubsub")]
 use {
     futures::stream::StreamExt, solana_rpc_client_types::config::RpcTransactionLogsFilter,
-    spume::WasmPubsubClient,
+    spume::WasmPubsubClient, std::time::Duration,
 };
 use {
     solana_account_decoder_client_types::UiAccountEncoding,
@@ -266,4 +266,14 @@ async fn ws_is_connected_returns_true_when_open() {
 
     // The connection should be active immediately upon successful connect
     assert!(client.is_connected(), "client should report as connected");
+}
+
+#[cfg(feature = "pubsub")]
+#[wasm_bindgen_test]
+async fn ws_request_timeout_is_configurable() {
+    let client = WasmPubsubClient::connect(WS_URL)
+        .expect("WebSocket connect failed")
+        .with_request_timeout(Duration::from_secs(5));
+
+    client.slot_subscribe().await.expect("slotSubscribe failed");
 }

@@ -123,6 +123,25 @@ impl WasmPubsubClient {
         self.provider.url()
     }
 
+    /// Set how long a request waits for its response (default 60 s).
+    ///
+    /// Convenience pass-through to
+    /// [`PubsubProvider::with_request_timeout`](pubsub_provider::PubsubProvider::with_request_timeout).
+    ///
+    /// ```no_run
+    /// use {spume::WasmPubsubClient, std::time::Duration};
+    /// # fn main() -> Result<(), Box<solana_rpc_client_types::request::RpcError>> {
+    /// let client = WasmPubsubClient::connect("wss://rpc.example.com")?
+    ///     .with_request_timeout(Duration::from_secs(10));
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn with_request_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.provider = self.provider.with_request_timeout(timeout);
+        self
+    }
+
     /// Returns `true` if the underlying WebSocket connection is still open.
     pub fn is_connected(&self) -> bool {
         self.provider.is_connected()
