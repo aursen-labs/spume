@@ -283,7 +283,15 @@ async fn ws_logs_subscribe_unsubscribe() {
 async fn ws_is_connected_returns_true_when_open() {
     let client = WasmPubsubClient::connect(WS_URL).expect("WebSocket connect failed");
 
-    // The connection should be active immediately upon successful connect
+    // `connect` returns while the socket is still handshaking, so this is
+    // false until the connection actually opens.
+    assert!(
+        !client.is_connected(),
+        "client should not claim to be connected mid-handshake"
+    );
+
+    // A completed round trip means the handshake is done.
+    client.slot_subscribe().await.expect("slotSubscribe failed");
     assert!(client.is_connected(), "client should report as connected");
 }
 
@@ -304,8 +312,8 @@ async fn ws_client_clone_shares_the_connection() {
     let clone = client.clone();
     drop(client);
 
-    assert!(clone.is_connected(), "clone should still be connected");
     let mut sub = clone.slot_subscribe().await.expect("slotSubscribe failed");
+    assert!(clone.is_connected(), "clone should still be connected");
     sub.next()
         .await
         .expect("subscription closed before any notification")
