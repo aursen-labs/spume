@@ -133,37 +133,47 @@ impl HttpProvider {
         let response =
             response.map_err(|err| Box::new(RpcError::RpcRequestError(err.to_string())))?;
         let status = response.status();
-        let is_success = (200..300).contains(&status);
-
         let body = read_body_capped(&response, self.max_response_size).await?;
-        let http_error = || {
-            Box::new(RpcError::RpcRequestError(format!(
-                "HTTP {status}: {}",
-                String::from_utf8_lossy(&body)
-            )))
-        };
-
-        match serde_json::from_slice::<JsonRpcResponse<R>>(&body) {
-            Ok(JsonRpcResponse {
-                error: Some(error), ..
-            }) => Err(Box::new(error.into_rpc_error())),
-            Ok(JsonRpcResponse {
-                result: Some(result),
-                ..
-            }) => Ok(result),
-            // No `result` and no `error`: only legal when the result itself is
-            // `null`, which some methods do return.
-            Ok(_) if is_success => serde_json::from_value(Value::Null)
-                .map_err(|_| Box::new(RpcError::ParseError("result".to_string()))),
-            Err(err) if is_success => Err(Box::new(RpcError::ParseError(err.to_string()))),
-            _ => Err(http_error()),
-        }
+        interpret_body(&body, status)
     }
 
     fn next_id(&self) -> u64 {
         let id = self.id.get().wrapping_add(1);
         self.id.set(id);
         id
+    }
+}
+
+/// Turn a response body into `R`, or into the most specific error available.
+///
+/// A JSON-RPC `error` is surfaced whatever the status carrying it, but a
+/// `result` only counts on a 2xx — a gateway can return `500` with a body that
+/// happens to parse, and that is not a successful call.
+fn interpret_body<R: DeserializeOwned>(body: &[u8], status: u16) -> Result<R, Box<RpcError>> {
+    let is_success = (200..300).contains(&status);
+    let http_error = || {
+        Box::new(RpcError::RpcRequestError(format!(
+            "HTTP {status}: {}",
+            String::from_utf8_lossy(body)
+        )))
+    };
+
+    match serde_json::from_slice::<JsonRpcResponse<R>>(body) {
+        Ok(JsonRpcResponse {
+            error: Some(error), ..
+        }) => Err(Box::new(error.into_rpc_error())),
+        Ok(JsonRpcResponse {
+            result: Some(result),
+            ..
+        }) if is_success => Ok(result),
+        // No `result` and no `error`: only legal when the result itself is
+        // `null`, which some methods do return.
+        Ok(JsonRpcResponse { result: None, .. }) if is_success => {
+            serde_json::from_value(Value::Null)
+                .map_err(|_| Box::new(RpcError::ParseError("result".to_string())))
+        }
+        Err(err) if is_success => Err(Box::new(RpcError::ParseError(err.to_string()))),
+        _ => Err(http_error()),
     }
 }
 
@@ -246,5 +256,47 @@ impl JsonRpcError {
                 .unwrap_or(RpcResponseErrorData::Empty),
             _ => RpcResponseErrorData::Empty,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use {super::*, wasm_bindgen_test::wasm_bindgen_test};
+
+    #[wasm_bindgen_test]
+    fn result_only_counts_on_a_2xx() {
+        let body = br#"{"jsonrpc":"2.0","id":1,"result":"ok"}"#;
+
+        assert_eq!(interpret_body::<String>(body, 200).expect("200"), "ok");
+
+        // A gateway can answer 500 with a body that happens to parse.
+        for status in [429, 500, 502] {
+            let err = interpret_body::<String>(body, status)
+                .expect_err("non-2xx result should not be Ok");
+            assert!(
+                err.to_string().contains(&format!("HTTP {status}")),
+                "unexpected error: {err}"
+            );
+        }
+    }
+
+    #[wasm_bindgen_test]
+    fn rpc_error_wins_over_the_status() {
+        let body = br#"{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"nope"}}"#;
+
+        for status in [200, 500] {
+            let err = interpret_body::<String>(body, status).expect_err("error body");
+            assert!(err.to_string().contains("nope"), "unexpected error: {err}");
+        }
+    }
+
+    #[wasm_bindgen_test]
+    fn null_result_is_ok_on_a_2xx() {
+        let body = br#"{"jsonrpc":"2.0","id":1,"result":null}"#;
+        assert!(
+            interpret_body::<Option<String>>(body, 200)
+                .expect("null result")
+                .is_none()
+        );
     }
 }
