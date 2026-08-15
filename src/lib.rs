@@ -3,30 +3,46 @@
 //! Wraps the Solana JSON-RPC API over HTTP and (optionally) PubSub WebSocket.
 //! Returns the canonical types from [`solana_rpc_client_types`].
 //!
-//! - [`WasmClient`] — HTTP RPC client.
+//! - [`WasmClient`] — HTTP RPC client, gated behind the `http` feature (on by
+//!   default).
 //! - [`WasmPubsubClient`] — WebSocket PubSub client, gated behind the
 //!   `pubsub` feature (off by default).
-//!
-//! # Example
-//!
-//! ```no_run
-//! use spume::WasmClient;
-//!
-//! # async fn run() -> Result<(), Box<solana_rpc_client_types::request::RpcError>> {
-//! let client = WasmClient::new("https://api.mainnet-beta.solana.com");
-//! let slot = client.get_slot(None).await?;
-//! # Ok(()) }
-//! ```
+//! - [`rpc`] — every method above as a transport-free builder, and [`codec`],
+//!   the request/response codec they are built on. Both are always available:
+//!   with `default-features = false` they are *all* that is compiled and the
+//!   crate carries no wasm dependencies, so a host that owns its transport
+//!   (e.g. a Crux core driving `crux_http`) keeps the typed method list.
 //!
 //! [`solana_rpc_client_types`]: https://crates.io/crates/solana-rpc-client-types
+// Gated so the example stays compiled rather than `ignore`d: with `http` off
+// there is no `WasmClient` for it to name.
+#![cfg_attr(
+    feature = "http",
+    doc = r#"
+# Example
 
+```no_run
+use spume::WasmClient;
+
+# async fn run() -> Result<(), Box<solana_rpc_client_types::request::RpcError>> {
+let client = WasmClient::new("https://api.mainnet-beta.solana.com");
+let slot = client.get_slot(None).await?;
+# Ok(()) }
+```
+"#
+)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+#[cfg(feature = "http")]
 use crate::provider::HttpProvider;
 #[cfg(feature = "pubsub")]
 use crate::pubsub_provider::PubsubProvider;
 
-mod methods;
+pub mod codec;
+pub mod rpc;
+
+#[cfg(feature = "http")]
+#[cfg_attr(docsrs, doc(cfg(feature = "http")))]
 pub mod provider;
 
 #[cfg(feature = "pubsub")]
@@ -39,11 +55,14 @@ pub mod pubsub_provider;
 ///
 /// Cheap to construct (no connection is opened until the first request) and
 /// cheap to clone (the underlying provider is reference-counted).
+#[cfg(feature = "http")]
+#[cfg_attr(docsrs, doc(cfg(feature = "http")))]
 #[derive(Clone, Debug)]
 pub struct WasmClient {
     provider: HttpProvider,
 }
 
+#[cfg(feature = "http")]
 impl WasmClient {
     /// Construct a client.
     ///

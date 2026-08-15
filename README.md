@@ -13,8 +13,11 @@
 ## Install
 
 ```bash
-cargo add spume                       # HTTP RPC only
-cargo add spume --features pubsub     # + WebSocket subscriptions
+cargo add spume                    # HTTP RPC only
+cargo add spume --features pubsub  # + WebSocket subscriptions
+
+# codec only, bring your own transport
+cargo add spume --no-default-features --features check_address
 ```
 
 The `pubsub` feature is off by default — opt in only if you need WebSocket subscriptions. HTTP-only consumers ship a smaller wasm bundle.
@@ -40,7 +43,7 @@ let owner = address!("11111111111111111111111111111111");
 let balance = client.get_balance(&owner, None).await?.value;
 ```
 
-See [`src/methods.rs`](src/methods.rs) for the full list of RPC methods.
+See [`src/rpc.rs`](src/rpc.rs) for the full list of RPC methods — one table, from which both the client methods and the transport-free builders below are generated.
 
 ### Response size limit
 
@@ -79,7 +82,52 @@ sub.unsubscribe().await?;
 
 Supported subscriptions: `account`, `block`, `logs`, `program`, `root`, `signature`, `slot`, `slotsUpdates`, `vote`. See [`src/pubsub_methods.rs`](src/pubsub_methods.rs).
 
-## Example
+## Bring your own transport (Crux, native, tests)
+
+With `default-features = false` the crate drops every wasm dependency and compiles down to [`spume::rpc`](src/rpc.rs) — the same method list as `WasmClient`, same arguments, same result types, except each one *builds* the call instead of sending it. Useful where the transport isn't yours to pick: a [Crux](https://redbadger.github.io/crux/) core, for instance, must stay side-effect free and issue HTTP through `crux_http`.
+
+```rust
+use {crux_core::Command, crux_http::command::Http};
+
+let call = spume::rpc::get_balance(&address, None)?;   // Call<Response<u64>>
+
+Command::new(|ctx| async move {
+    let response = Http::post(RPC_URL)
+        .body(call.body(1))                            // params assembled by spume
+        .content_type(crux_http::mime::APPLICATION_JSON) // after `body`, which sets text/plain
+        .build()
+        .into_future(ctx.clone())
+        .await?;
+
+    // Typed by the same call — no `Response<u64>` to name anywhere.
+    let balance = call.parse(
+        response.body().map(Vec::as_slice).unwrap_or_default(),
+        response.status().as_u16(),
+    )?;
+
+    ctx.send_event(Event::Balance(balance.value));
+    Ok::<_, Box<dyn std::error::Error>>(())
+})
+```
+
+Working version, tests and all: [`examples/crux-balance`](examples/crux-balance).
+
+`spume::rpc` and the client methods are generated from one table, so they cannot drift apart. Underneath sits [`spume::codec`](src/codec.rs) — `request_body` and `interpret_body` — for calls this crate doesn't cover.
+
+`check_address` still applies here, but it rides in on `default` — turning the defaults off drops it too, so opt back in (as the install line above does) to keep `get_balance` returning `Err` for a malformed address before a request is ever built.
+
+Only the codec crosses over: PubSub is a WebSocket held open for the process lifetime, which belongs in the shell, not the core.
+
+## Examples
+
+[`examples/crux-balance`](examples/crux-balance) is a [Crux](https://redbadger.github.io/crux/) core that reads an account balance through `crux_http`, with `spume` as the codec-only dependency described above. Laid out like Crux's own [`counter-http`](https://github.com/redbadger/crux/tree/master/examples/counter-http): a Rust core plus SwiftUI (iOS/macOS) and Jetpack Compose shells.
+
+```bash
+cd examples/crux-balance
+cargo test -p shared   # the core, no shell and no network needed
+just apple/build       # iOS + macOS  (needs boltffi, xcodegen, Xcode)
+cd Android && just build   # Android   (needs boltffi, Android SDK/NDK)
+```
 
 [`examples/leptos-slot-monitor`](examples/leptos-slot-monitor) is a small [Leptos](https://leptos.dev) CSR app that streams the live devnet slot via WebSocket and fetches the node version via HTTP:
 

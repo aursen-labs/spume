@@ -13,10 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `WasmPubsubClient::with_request_timeout`, capping how long a pubsub request waits for its response (default 60 s) so a socket that stays open but never answers can no longer hang the caller ([#39](https://github.com/aursen-labs/spume/pull/39)).
 - Added `WasmClient::with_timeout` and `HttpProvider::with_timeout`, so the request timeout is reachable from the client and settable builder-style rather than only through `HttpProvider::new_with_timeout` ([#40](https://github.com/aursen-labs/spume/pull/40)).
 - Added `Clone` and `Debug` for `WasmPubsubClient`; clones share the one connection, matching `PubsubProvider` ([#40](https://github.com/aursen-labs/spume/pull/40)).
+- Added the `rpc` module: every `WasmClient` method as a transport-free builder returning a `Call<R>`, which knows how to serialize its request body and parse its own response type. Both views are generated from one table, so they cannot drift apart.
+- Added `examples/crux-balance`, a Crux core reading an account balance through `crux_http` with `spume` as a codec-only dependency, plus SwiftUI (iOS/macOS) and Jetpack Compose shells. Its tests answer the HTTP effect themselves, so the round trip runs with no network and no shell.
+- Added the `codec` module — `request_body`, `interpret_body`, `Call` — and a `http` feature (on by default) gating everything wasm. With `default-features = false` the crate builds on any target with no wasm dependencies, so hosts that own their transport (a Crux core issuing `crux_http` requests, a native client, a test harness) keep the typed method list.
 
 ### Changed
 
 - Subscription streams now yield one `Err` per disconnect and resume instead of ending, and `Subscription::id` returns a stable client-side id rather than the server's ([#37](https://github.com/aursen-labs/spume/pull/37)).
+
+- With `check_address` on, a rejected address now reports the offending string and the underlying parse error instead of a bare `"Invalid address"`.
+
+- Pubsub frames are built by borrowing their params instead of copying them through `json!`, and a notification's `result` is moved out of the incoming frame rather than cloned — an account notification no longer deep-copies the account data on its way to the stream.
 
 - HTTP responses deserialize straight into the target type instead of going through `serde_json::Value` and cloning the `result` subtree, cutting ~9% off a 1.7 MiB response ([#41](https://github.com/aursen-labs/spume/pull/41)).
 
