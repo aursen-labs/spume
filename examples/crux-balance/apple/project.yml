@@ -1,0 +1,50 @@
+name: BalanceApp
+packages:
+  Shared:
+    path: ./generated/Shared
+  App:
+    path: ./generated/App
+options:
+  bundleIdPrefix: dev.spume.balance
+attributes:
+  BuildIndependentTargetsInParallel: true
+
+targetTemplates:
+  app:
+    type: application
+    sources:
+      - path: BalanceApp
+        excludes:
+          - "Info-*.plist"
+    scheme:
+      management:
+        shared: true
+    dependencies:
+      - package: Shared
+      - package: App
+
+targets:
+  BalanceApp-iOS:
+    templates: [app]
+    platform: iOS
+    deploymentTarget: 18.0
+    info:
+      path: BalanceApp/Info-iOS.plist
+      properties:
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UILaunchScreen: {}
+
+  BalanceApp-macOS:
+    templates: [app]
+    platform: macOS
+    deploymentTarget: "15.0"
+    info:
+      path: BalanceApp/Info-macOS.plist
+      properties:
+        NSSupportsAutomaticGraphicsSwitching: true
+    settings:
+      OTHER_LDFLAGS: [-w]
+      ENABLE_USER_SCRIPT_SANDBOXING: NO
