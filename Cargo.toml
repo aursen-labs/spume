@@ -15,19 +15,27 @@ categories = ["wasm", "web-programming"]
 crate-type = ["rlib"]
 
 [features]
-default = ["check_address"]
-pubsub = ["gloo-net/websocket"]
+default = ["http", "check_address"]
+http = [
+    "dep:futures",
+    "dep:gloo-net",
+    "dep:gloo-timers",
+    "dep:js-sys",
+    "dep:wasm-bindgen",
+    "dep:wasm-bindgen-futures",
+    "dep:web-sys",
+]
+pubsub = ["http", "gloo-net/websocket"]
 check_address = []
 
 [dependencies]
-futures = "0.3"
-getrandom = { version = "0.3.4", features = ["wasm_js"] }
+futures = { version = "0.3", optional = true }
 gloo-net = { version = "0.7.0", default-features = false, features = [
     "http",
     "json",
-] }
-gloo-timers = { version = "0.4", features = ["futures"] }
-js-sys = "0.3"
+], optional = true }
+gloo-timers = { version = "0.4", features = ["futures"], optional = true }
+js-sys = { version = "0.3", optional = true }
 serde = "1"
 serde_json = "1"
 solana-address = "~2.6.1"
@@ -39,14 +47,17 @@ solana-rpc-client-types = "~4.1.2"
 solana-short-vec = "~3.2.2"
 solana-signature = "~3.4.1"
 solana-transaction-status-client-types = "4.1.2"
-wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4"
+wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
 web-sys = { version = "0.3", features = [
     "AbortController",
     "ReadableStream",
     "ReadableStreamDefaultReader",
     "WebSocket",
-] }
+], optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.3.4", features = ["wasm_js"] }
 
 [dev-dependencies]
 solana-account-decoder-client-types = "4.1"

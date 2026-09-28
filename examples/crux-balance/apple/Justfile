@@ -1,0 +1,42 @@
+# `xcode-select` often points at the Command Line Tools, which carry no iOS
+# SDK — the iOS targets then fail to link. Overriding it here needs no sudo.
+export DEVELOPER_DIR := env('DEVELOPER_DIR', '/Applications/Xcode.app/Contents/Developer')
+
+default: build
+
+# Rust targets BoltFFI packages for Apple platforms.
+install-targets:
+    rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-darwin x86_64-apple-ios
+
+# Event / ViewModel / Effect as Swift types (the `App` package).
+typegen:
+    RUST_LOG=info cargo run --package shared --bin codegen --features codegen \
+        -- --language swift --output-dir generated
+
+# The core itself as a Swift package (the `Shared` package): builds the
+# staticlib for each Apple target and writes the FFI bindings.
+[working-directory('../shared')]
+package: install-targets
+    rm -rf ../apple/generated/Shared
+    boltffi pack apple
+
+# project.yml -> BalanceApp.xcodeproj (no .pbxproj is checked in)
+generate-project:
+    xcodegen
+
+generate: typegen package generate-project
+
+build: generate
+    xcodebuild \
+        -project BalanceApp.xcodeproj \
+        -scheme BalanceApp-macOS \
+        -configuration Debug \
+        ONLY_ACTIVE_ARCH=YES \
+        -skipPackagePluginValidation \
+        build
+
+open: generate
+    xed .
+
+clean:
+    rm -rf generated *.xcodeproj *.xcworkspace DerivedData build

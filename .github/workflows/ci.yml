@@ -77,3 +77,9 @@ jobs:
 
       - name: Run wasm integration tests
         run: just test
+
+      - name: Run codec tests
+        run: cargo test --no-default-features --features check_address
+
+      - name: Check the codec-only build on wasm
+        run: cargo check --no-default-features --target wasm32-unknown-unknown

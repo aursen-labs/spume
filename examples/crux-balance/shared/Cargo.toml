@@ -1,0 +1,46 @@
+[package]
+name = "shared"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+
+# `staticlib` for Apple, `cdylib` for Android, `lib` for the codegen binary
+# and the tests.
+[lib]
+crate-type = ["cdylib", "lib", "staticlib"]
+
+[[bin]]
+name = "codegen"
+required-features = ["codegen"]
+
+[features]
+codegen = [
+    "dep:anyhow",
+    "dep:clap",
+    "dep:log",
+    "dep:pretty_env_logger",
+    "facet_typegen",
+]
+facet_typegen = ["crux_core/facet_typegen"]
+
+[dependencies]
+# No default features: the core is built for iOS and Android, so it must not
+# pull in spume's wasm transport. `check_address` still applies — a malformed
+# address is rejected in the core, before any effect reaches the shell.
+spume = { path = "../../..", default-features = false, features = [
+    "check_address",
+] }
+boltffi = "=0.29.3"
+crux_core.workspace = true
+crux_http.workspace = true
+facet = "=0.46.5"
+serde = { workspace = true, features = ["derive"] }
+
+# codegen only
+anyhow = { version = "1", optional = true }
+clap = { version = "4", optional = true, features = ["derive"] }
+log = { version = "0.4", optional = true }
+pretty_env_logger = { version = "0.5", optional = true }
+
+[dev-dependencies]
+serde_json = "1"

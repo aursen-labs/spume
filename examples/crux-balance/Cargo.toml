@@ -1,0 +1,12 @@
+[workspace]
+members = ["shared"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+publish = false
+
+[workspace.dependencies]
+crux_core = "0.20"
+crux_http = "0.20"
+serde = "1"

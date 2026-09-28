@@ -1,0 +1,21 @@
+default: test
+
+# Rust core: the only part that runs without Xcode or the Android SDK.
+test:
+    cargo test -p shared
+
+check:
+    cargo +nightly fmt --check
+    cargo clippy -p shared --all-targets -- -D warnings
+
+# Every shell, in the order you'd set them up.
+ios: (apple)
+apple:
+    just apple/build
+
+android:
+    just android/build
+
+clean:
+    cargo clean
+    rm -rf apple/generated apple/*.xcodeproj Android/generated

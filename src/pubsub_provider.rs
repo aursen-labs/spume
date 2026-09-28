@@ -1,5 +1,5 @@
 use {
-    crate::provider::parse_rpc_error,
+    crate::codec::{parse_rpc_error, request_body},
     futures::{
         channel::{mpsc, oneshot},
         future::{self, Either},
@@ -10,7 +10,7 @@ use {
     gloo_timers::future::sleep,
     serde::de::DeserializeOwned,
     serde_json::{Value, json},
-    solana_rpc_client_types::request::RpcError,
+    solana_rpc_client_types::request::{RpcError, RpcRequest},
     std::{
         cell::{Cell, RefCell},
         collections::HashMap,
@@ -51,7 +51,9 @@ type Socket = (
 struct SubEntry {
     tx: mpsc::UnboundedSender<Result<Value, Box<RpcError>>>,
     subscribe_method: &'static str,
-    params: Value,
+    /// Shared so a reconnect can re-issue the request without copying it — the
+    /// entry has to keep its own copy for the reconnect after that.
+    params: Rc<Value>,
     /// `None` while disconnected or mid-resubscribe.
     server_id: Option<u64>,
 }
@@ -160,7 +162,8 @@ impl PubsubProvider {
         unsubscribe_method: &'static str,
         params: Value,
     ) -> Result<Subscription<T>, Box<RpcError>> {
-        let server_id = request_subscription(&self.inner, subscribe_method, params.clone()).await?;
+        let params = Rc::new(params);
+        let server_id = request_subscription(&self.inner, subscribe_method, &params).await?;
 
         let local_id = self.inner.next_id();
         let (tx, rx) = mpsc::unbounded::<Result<Value, Box<RpcError>>>();
@@ -401,11 +404,11 @@ fn disconnected(inner: &Rc<PubsubInner>, out_rx: &mut mpsc::UnboundedReceiver<Me
 /// Re-issue every live subscription on a fresh connection and remap the
 /// server-assigned ids.
 fn resubscribe(inner: &Rc<PubsubInner>) {
-    let live: Vec<(u64, &'static str, Value)> = inner
+    let live: Vec<(u64, &'static str, Rc<Value>)> = inner
         .subscriptions
         .borrow()
         .iter()
-        .map(|(local_id, entry)| (*local_id, entry.subscribe_method, entry.params.clone()))
+        .map(|(local_id, entry)| (*local_id, entry.subscribe_method, Rc::clone(&entry.params)))
         .collect();
     if live.is_empty() {
         return;
@@ -414,7 +417,7 @@ fn resubscribe(inner: &Rc<PubsubInner>) {
     let inner = Rc::clone(inner);
     spawn_local(async move {
         for (local_id, method, params) in live {
-            let result = request_subscription(&inner, method, params).await;
+            let result = request_subscription(&inner, method, &params).await;
             let mut subscriptions = inner.subscriptions.borrow_mut();
             // Consumer may have dropped the subscription while we waited.
             let Some(entry) = subscriptions.get_mut(&local_id) else {
@@ -436,8 +439,8 @@ fn resubscribe(inner: &Rc<PubsubInner>) {
 
 async fn request_subscription(
     inner: &Rc<PubsubInner>,
-    method: &str,
-    params: Value,
+    method: &'static str,
+    params: &Value,
 ) -> Result<u64, Box<RpcError>> {
     let result = send_request(inner, method, params).await?;
     serde_json::from_value(result).map_err(|err| Box::new(RpcError::ParseError(err.to_string())))
@@ -445,17 +448,13 @@ async fn request_subscription(
 
 async fn send_request(
     inner: &Rc<PubsubInner>,
-    method: &str,
-    params: Value,
+    method: &'static str,
+    params: &Value,
 ) -> Result<Value, Box<RpcError>> {
     let id = inner.next_id();
-    let body = json!({
-        "jsonrpc": "2.0",
-        "id": id,
-        "method": method,
-        "params": params,
-    })
-    .to_string();
+    // Borrows `params` into the frame; `json!` would deep-copy it through
+    // `to_value` first.
+    let body = request_body(id, RpcRequest::Custom { method }, params)?;
 
     let (tx, rx) = oneshot::channel::<Result<Value, Box<RpcError>>>();
     inner.pending.borrow_mut().insert(id, tx);
@@ -495,19 +494,27 @@ fn remove_subscription(inner: &PubsubInner, local_id: u64) -> Option<u64> {
 
 // Frames with an `id` are responses to our requests; frames with `params.subscription`
 // are server-pushed notifications.
-fn dispatch_message(inner: &Rc<PubsubInner>, value: Value) {
+fn dispatch_message(inner: &Rc<PubsubInner>, mut value: Value) {
     if let Some(id) = value.get("id").and_then(Value::as_u64) {
         if let Some(tx) = inner.pending.borrow_mut().remove(&id) {
-            let response = match value.get("error").filter(|err| !err.is_null()) {
+            // The frame is ours to consume: take both subtrees rather than clone them.
+            let error = value
+                .get_mut("error")
+                .map(Value::take)
+                .filter(|err| !err.is_null());
+            let response = match error {
                 Some(error) => Err(parse_rpc_error(error)),
-                None => Ok(value.get("result").cloned().unwrap_or(Value::Null)),
+                None => Ok(value
+                    .get_mut("result")
+                    .map(Value::take)
+                    .unwrap_or(Value::Null)),
             };
             let _ = tx.send(response);
         }
         return;
     }
 
-    let Some(params) = value.get("params") else {
+    let Some(params) = value.get_mut("params") else {
         return;
     };
     let Some(server_id) = params.get("subscription").and_then(Value::as_u64) else {
@@ -516,7 +523,12 @@ fn dispatch_message(inner: &Rc<PubsubInner>, value: Value) {
     let Some(local_id) = inner.server_ids.borrow().get(&server_id).copied() else {
         return;
     };
-    let result = params.get("result").cloned().unwrap_or(Value::Null);
+    // Ours to consume: take the payload rather than copy it. Account
+    // notifications carry the full account data.
+    let result = params
+        .get_mut("result")
+        .map(Value::take)
+        .unwrap_or(Value::Null);
     if let Some(entry) = inner.subscriptions.borrow().get(&local_id) {
         let _ = entry.tx.unbounded_send(Ok(result));
     }
@@ -556,7 +568,8 @@ impl<T> Subscription<T> {
             return Ok(true);
         };
 
-        let result = send_request(&self.inner, self.unsubscribe_method, json!([server_id])).await?;
+        let result =
+            send_request(&self.inner, self.unsubscribe_method, &json!([server_id])).await?;
         serde_json::from_value(result)
             .map_err(|err| Box::new(RpcError::ParseError(err.to_string())))
     }
@@ -597,14 +610,13 @@ impl<T> Drop for Subscription<T> {
             return;
         };
 
-        let body = json!({
-            "jsonrpc": "2.0",
-            "id": self.inner.next_id(),
-            "method": self.unsubscribe_method,
-            "params": [server_id],
-        })
-        .to_string();
-        let _ = self.inner.out_tx.unbounded_send(Message::Text(body));
+        let request = RpcRequest::Custom {
+            method: self.unsubscribe_method,
+        };
+        // Infallible: the params are a single integer.
+        if let Ok(body) = request_body(self.inner.next_id(), request, [server_id]) {
+            let _ = self.inner.out_tx.unbounded_send(Message::Text(body));
+        }
     }
 }
 
@@ -626,7 +638,7 @@ mod tests {
             SubEntry {
                 tx: notify_tx,
                 subscribe_method: "slotSubscribe",
-                params: json!([]),
+                params: Rc::new(json!([])),
                 server_id: Some(42),
             },
         );
@@ -662,7 +674,7 @@ mod tests {
         let inner = Rc::new(PubsubInner::new(out_tx));
         inner.request_timeout.set(Duration::from_millis(20));
 
-        let err = send_request(&inner, "slotSubscribe", json!([]))
+        let err = send_request(&inner, "slotSubscribe", &json!([]))
             .await
             .expect_err("expected a timeout, got Ok");
 
@@ -684,7 +696,7 @@ mod tests {
             SubEntry {
                 tx: notify_tx,
                 subscribe_method: "slotSubscribe",
-                params: json!([]),
+                params: Rc::new(json!([])),
                 server_id: None,
             },
         );

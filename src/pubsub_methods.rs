@@ -1,5 +1,5 @@
 use {
-    crate::{WasmPubsubClient, methods::CheckAddress, pubsub_provider::Subscription},
+    crate::{WasmPubsubClient, pubsub_provider::Subscription, rpc::CheckAddress},
     serde_json::json,
     solana_rpc_client_types::{
         config::{

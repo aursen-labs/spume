@@ -1,0 +1,33 @@
+# Android Studio's bundled JBR is Java 25, which Gradle rejects
+# ("Unsupported class file major version 69"). Point at a JDK 21 — the same
+# version gradle/gradle-daemon-jvm.properties pins the daemon to.
+export JAVA_HOME := env('JAVA_HOME', '/opt/homebrew/opt/openjdk@21')
+export ANDROID_HOME := env('ANDROID_HOME', home_dir() / 'Library/Android/sdk')
+
+default: build
+
+install-targets:
+    rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+
+# The core as a .so per ABI, plus BoltFFI's Kotlin bindings.
+# Needs the NDK: `boltffi` finds it under $ANDROID_HOME/ndk, or set
+# ANDROID_NDK_HOME. Install it with `cargo install boltffi_cli`.
+[working-directory('../shared')]
+package: install-targets
+    boltffi pack android
+    rm -f ../Android/generated/build.gradle.kts
+
+# Event / ViewModel / Effect as Kotlin types.
+typegen: package
+    RUST_LOG=info cargo run --package shared --bin codegen --features codegen \
+        -- --language kotlin --output-dir generated
+
+build: typegen
+    ./gradlew --no-daemon :app:assembleDebug
+
+install: build
+    ./gradlew --no-daemon :app:installDebug
+
+clean:
+    rm -rf generated
+    ./gradlew --no-daemon clean || true
