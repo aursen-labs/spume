@@ -59,7 +59,7 @@ cargo test -p shared
 ### iOS / macOS
 
 Needs [`xcodegen`](https://github.com/yonaskolb/XcodeGen), `boltffi`
-(`cargo install boltffi`) and Xcode.
+(`cargo install boltffi_cli`) and Xcode.
 
 ```bash
 just apple/build     # typegen + boltffi pack apple + xcodegen + xcodebuild
