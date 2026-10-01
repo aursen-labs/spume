@@ -42,15 +42,15 @@ gloo-timers = { version = "0.4", features = ["futures"], optional = true }
 js-sys = { version = "0.3", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-solana-address = "~2.6.1"
+solana-address = "~2.7.0"
 solana-epoch-info = { version = "3.1", features = ["serde"] }
-solana-epoch-schedule = { version = "~3.2.0", features = ["serde"] }
-solana-hash = "~4.4.0"
-solana-reward-info = "~6.2.0"
-solana-rpc-client-types = "~4.1.2"
-solana-short-vec = "~3.2.2"
-solana-signature = "~3.4.1"
-solana-transaction-status-client-types = "4.1.2"
+solana-epoch-schedule = { version = "~3.3.0", features = ["serde"] }
+solana-hash = "~4.6.0"
+solana-reward-info = "~7.0.0"
+solana-rpc-client-types = "~4.3.0"
+solana-short-vec = "~3.3.0"
+solana-signature = "~3.5.2"
+solana-transaction-status-client-types = "4.3.0"
 wasm-bindgen = { version = "0.2", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
 web-sys = { version = "0.3", features = [
@@ -62,9 +62,10 @@ web-sys = { version = "0.3", features = [
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.3.4", features = ["wasm_js"] }
+getrandom-04 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }
 
 [dev-dependencies]
-solana-account-decoder-client-types = "4.1"
+solana-account-decoder-client-types = "4.3"
 wasm-bindgen-test = "0.3"
 
 [package.metadata.docs.rs]
