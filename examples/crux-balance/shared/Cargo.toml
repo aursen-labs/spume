@@ -29,6 +29,7 @@ facet_typegen = ["crux_core/facet_typegen"]
 # address is rejected in the core, before any effect reaches the shell.
 spume = { path = "../../..", default-features = false, features = [
     "check_address",
+    "crux",
 ] }
 boltffi = "=0.29.3"
 crux_core.workspace = true

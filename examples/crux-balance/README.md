@@ -13,37 +13,23 @@ Android/    Jetpack Compose shell
 
 ## The point
 
-A Crux core is side-effect free and compiles for iOS and Android, so it cannot
-use `spume`'s wasm transport. It can still use the typed method list:
+A Crux core asks its shell to perform I/O. Enable `spume`'s optional `crux`
+feature with `default-features = false` to use the typed client without its
+browser transport:
 
 ```rust
-let call = spume::rpc::get_balance(&address, None)?;   // Call<Response<u64>>
-
-let response = Http::post(RPC_URL)
-    .body(call.body(1))          // params assembled by spume
-    .content_type(crux_http::mime::APPLICATION_JSON)
-    .build()
-    .into_future(ctx)
-    .await;
-
-let balance = call.parse(body, status)?;               // result type from the same call
+let client = spume::CruxClient::new(RPC_URL, ctx.clone());
+let balance = client.get_balance(&address, None).await?;
 ```
 
-`spume` is a dependency with `default-features = false` — no `gloo-net`, no
-`web-sys`, nothing that would fail to build for `aarch64-apple-ios`. The shells
-never learn that JSON-RPC is involved; they carry bytes.
+This example validates the address in `update` with `spume::rpc::get_balance`,
+then passes the resulting typed call to `CruxClient::send`. Invalid addresses
+never reach the shell. The client handles JSON content types and preserves
+JSON-RPC errors even when the server returns a non-2xx HTTP status.
 
-Three things worth stealing from `shared/src/app.rs`:
-
-- **`fetch` is generic over the result type** (`Call<R> → R`), because the call
-  already knows it. Every other `spume::rpc::*` builder works through the same
-  helper unchanged.
-- **A 4xx/5xx is handed back to `call.parse`.** `crux_http` turns an error status
-  into `HttpError::Http { code, body }`; a Solana RPC reports `Node is behind` as
-  a JSON-RPC error on a 500, so parsing the body anyway is what surfaces the real
-  message instead of a bare "HTTP 500".
-- **`check_address` works without the transport**, so a malformed address fails
-  in `update` and no effect ever reaches the shell.
+The existing shells only handle `crux_http` effects; they carry bytes without
+knowing about Solana. See the root README for the `CruxPubsubClient` and its
+additional WebSocket shell protocol.
 
 ## Run it
 

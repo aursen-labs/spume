@@ -1,8 +1,8 @@
 //! A Crux core that reads a Solana account balance.
 //!
 //! The core is side-effect free: it never performs the request, it asks the
-//! shell to. `spume::rpc` supplies the typed half — params in, result type
-//! out — and `crux_http` carries the bytes.
+//! shell to. `spume::CruxClient` supplies the typed RPC methods and sends
+//! HTTP effects through `crux_http`.
 //!
 //! Run `cargo test` to drive it without a shell.
 
@@ -12,15 +12,13 @@ use {
         macros::effect,
         render::{RenderOperation, render},
     },
-    crux_http::{HttpError, HttpRequest},
+    crux_http::HttpRequest,
     facet::Facet,
-    serde::{Deserialize, Serialize, de::DeserializeOwned},
-    spume::codec::Call,
+    serde::{Deserialize, Serialize},
+    spume::CruxClient,
 };
 
 const RPC_URL: &str = "https://api.mainnet-beta.solana.com";
-
-type Http = crux_http::command::Http<Effect, Event>;
 
 #[effect(facet_typegen)]
 #[derive(Debug)]
@@ -77,9 +75,9 @@ impl App for Balance {
                 model.error = None;
                 Command::new(|ctx| async move {
                     // Nothing here names `Response<u64>`; the call carries it.
-                    let event = match fetch(&call, ctx.clone()).await {
+                    let event = match CruxClient::new(RPC_URL, ctx.clone()).send(call).await {
                         Ok(balance) => Event::Balance(balance.value),
-                        Err(err) => Event::Failed(err),
+                        Err(err) => Event::Failed(err.to_string()),
                     };
                     ctx.send_event(event);
                 })
@@ -103,41 +101,6 @@ impl App for Balance {
         };
         ViewModel { balance }
     }
-}
-
-/// Ask the shell for any `spume` call's response, then let the call interpret it.
-///
-/// Generic over the result type because the [`Call`] already knows it. The same
-/// call parses both outcomes: a JSON-RPC error is an error whatever status
-/// carries it, which is why `crux_http`'s 4xx/5xx rejection is handed back to
-/// `parse` rather than reported as a bare "HTTP 500".
-async fn fetch<R: DeserializeOwned>(
-    call: &Call<R>,
-    ctx: crux_core::command::CommandContext<Effect, Event>,
-) -> Result<R, String> {
-    let response = Http::post(RPC_URL)
-        .body(call.body(1))
-        // After `body`, not before: `body` stamps the mime of whatever it was
-        // given over the content-type — a `String` becomes `text/plain`, and
-        // Solana answers that with `415 Invalid content-type`.
-        .content_type(crux_http::mime::APPLICATION_JSON)
-        .build()
-        .into_future(ctx)
-        .await;
-
-    let (body, status) = match &response {
-        Ok(response) => (
-            response.body().map(Vec::as_slice).unwrap_or_default(),
-            response.status().as_u16(),
-        ),
-        // The server answered, just not with a 2xx: its body may still hold a
-        // JSON-RPC error worth reporting.
-        Err(err @ HttpError::Http { code, .. }) => (err.body().unwrap_or_default(), *code),
-        // Transport failure — there is no body to interpret.
-        Err(err) => return Err(err.to_string()),
-    };
-
-    call.parse(body, status).map_err(|err| err.to_string())
 }
 
 #[cfg(test)]

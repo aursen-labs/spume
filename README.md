@@ -15,6 +15,7 @@
 ```bash
 cargo add spume                    # HTTP RPC only
 cargo add spume --features pubsub  # + WebSocket subscriptions
+cargo add spume --no-default-features --features crux,check_address  # Crux HTTP + PubSub
 
 # codec only, bring your own transport
 cargo add spume --no-default-features --features check_address
@@ -82,45 +83,99 @@ sub.unsubscribe().await?;
 
 Supported subscriptions: `account`, `block`, `logs`, `program`, `root`, `signature`, `slot`, `slotsUpdates`, `vote`. See [`src/pubsub_methods.rs`](src/pubsub_methods.rs).
 
-## Bring your own transport (Crux, native, tests)
+## Crux usage
 
-With `default-features = false` the crate drops every wasm dependency and compiles down to [`spume::rpc`](src/rpc.rs) — the same method list as `WasmClient`, same arguments, same result types, except each one *builds* the call instead of sending it. Useful where the transport isn't yours to pick: a [Crux](https://redbadger.github.io/crux/) core, for instance, must stay side-effect free and issue HTTP through `crux_http`.
+Enable `crux` with `default-features = false` to use the clients in a native or
+WASM Crux core without the browser transports. This feature targets
+`crux_core` / `crux_http` 0.20; it is off by default.
 
 ```rust
-use {crux_core::Command, crux_http::command::Http};
+use {
+    crux_core::{Command, macros::effect},
+    crux_http::HttpRequest,
+    futures::StreamExt,
+    spume::{CruxClient, CruxPubsubClient, crux::WebSocketRequest},
+};
 
-let call = spume::rpc::get_balance(&address, None)?;   // Call<Response<u64>>
+#[effect]
+enum Effect {
+    Http(HttpRequest),
+    WebSocket(WebSocketRequest),
+}
 
-Command::new(|ctx| async move {
-    let response = Http::post(RPC_URL)
-        .body(call.body(1))                            // params assembled by spume
-        .content_type(crux_http::mime::APPLICATION_JSON) // after `body`, which sets text/plain
-        .build()
-        .into_future(ctx.clone())
-        .await?;
+enum Event {
+    Slot(Result<u64, String>),
+}
 
-    // Typed by the same call — no `Response<u64>` to name anywhere.
-    let balance = call.parse(
-        response.body().map(Vec::as_slice).unwrap_or_default(),
-        response.status().as_u16(),
-    )?;
+fn fetch_slot() -> Command<Effect, Event> {
+    Command::new(|ctx| async move {
+        let client = CruxClient::new("https://api.devnet.solana.com", ctx.clone());
+        let slot = client.get_slot(None).await;
+        ctx.send_event(Event::Slot(slot.map_err(|e| e.to_string())));
+    })
+}
 
-    ctx.send_event(Event::Balance(balance.value));
-    Ok::<_, Box<dyn std::error::Error>>(())
-})
+fn watch_slots() -> Command<Effect, Event> {
+    Command::new(|ctx| async move {
+        let client = CruxPubsubClient::new("wss://api.devnet.solana.com", ctx.clone());
+        match client.slot_subscribe().await {
+            Ok(mut sub) => {
+                while let Some(slot) = sub.next().await {
+                    ctx.send_event(Event::Slot(slot.map(|s| s.slot).map_err(|e| e.to_string())));
+                }
+            }
+            Err(error) => ctx.send_event(Event::Slot(Err(error.to_string()))),
+        }
+    })
+}
 ```
 
-Working version, tests and all: [`examples/crux-balance`](examples/crux-balance).
+The RPC and subscription methods use the same tables and result types as the
+WASM clients. `CruxClient` also supports `.with_header(...)`,
+`.with_max_response_size(...)`, and `.send(call)` for transport-free builders.
 
-`spume::rpc` and the client methods are generated from one table, so they cannot drift apart. Underneath sits [`spume::codec`](src/codec.rs) — `request_body` and `interpret_body` — for calls this crate doesn't cover.
+HTTP works with an existing `crux_http` shell handler. WebSockets require a
+shell handler for [`WebSocketRequest`](src/crux.rs):
 
-`check_address` still applies here, but it rides in on `default` — turning the defaults off drops it too, so opt back in (as the install line above does) to keep `get_balance` returning `Err` for a malformed address before a request is ever built.
+- `Open { id, url, message }`: open a socket keyed by `id`, send the initial
+  message after connecting, and repeatedly resolve the request with
+  `WebSocketMessage::Text`, `Closed`, or `Error`.
+- `Send { id, message }`: send a frame on that socket. Report write failures
+  through its original `Open` stream.
+- `Close { id }`: close or cancel the socket, even during connection setup.
+  `Send` and `Close` are notifications and must not be resolved.
 
-Only the codec crosses over: PubSub is a WebSocket held open for the process lifetime, which belongs in the shell, not the core.
+Close the socket if resolving the stream fails. The protocol types derive
+Serde and Facet for Crux bridge serialization and type generation.
+
+Each subscription uses its own socket. `.unsubscribe().await` waits for the
+server acknowledgement; dropping the subscription closes its socket. A
+disconnect yields an error and ends the stream; resubscribe to reconnect.
+The shell owns timeouts and download limits. The core additionally rejects
+HTTP bodies and WebSocket messages over 10 MiB after they cross the bridge;
+this cannot bound the shell's buffer allocation. An oversized notification
+yields an error without ending the stream; an oversized message while awaiting
+a subscribe/unsubscribe acknowledgement fails that call. Malformed JSON is skipped.
+
+## Bring your own transport (native, tests)
+
+With all features disabled, [`spume::rpc`](src/rpc.rs) exposes the same method
+list as the clients, but each method builds a typed call instead of sending it:
+
+```rust
+let call = spume::rpc::get_balance(&address, None)?;
+let body = call.body(1);
+// Send `body` through your own transport, then:
+let balance = call.parse(&response_bytes, status)?;
+```
+
+[`spume::codec`](src/codec.rs) provides `request_body` and `interpret_body` for
+calls not covered by the method table. Opt into `check_address` when disabling
+defaults to keep validation of string addresses before requests are built.
 
 ## Examples
 
-[`examples/crux-balance`](examples/crux-balance) is a [Crux](https://redbadger.github.io/crux/) core that reads an account balance through `crux_http`, with `spume` as the codec-only dependency described above. Laid out like Crux's own [`counter-http`](https://github.com/redbadger/crux/tree/master/examples/counter-http): a Rust core plus SwiftUI (iOS/macOS) and Jetpack Compose shells.
+[`examples/crux-balance`](examples/crux-balance) is a [Crux](https://redbadger.github.io/crux/) core that reads an account balance through `crux_http`, using the optional `CruxClient` described above. Laid out like Crux's own [`counter-http`](https://github.com/redbadger/crux/tree/master/examples/counter-http): a Rust core plus SwiftUI (iOS/macOS) and Jetpack Compose shells.
 
 ```bash
 cd examples/crux-balance
@@ -147,4 +202,4 @@ just test     # spawn surfpool, run wasm integration tests, tear down
 
 The `test` recipe expects [`surfpool`](https://surfpool.run), `wasm-bindgen-cli@0.2.121`, [`just`](https://github.com/casey/just), and Node 22+ in `PATH`. The repo's [`rust-toolchain.toml`](rust-toolchain.toml) auto-installs the stable toolchain with the `wasm32-unknown-unknown` target.
 
-CI runs `fmt`, `clippy` (on both `--all-features` and `--no-default-features`), and the wasm test suite on every push; see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+CI runs `fmt`, `clippy`, the native Crux/codec tests, and the wasm test suite on every push; see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).

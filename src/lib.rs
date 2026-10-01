@@ -1,4 +1,4 @@
-//! Lightweight, ergonomic Solana JSON-RPC client for WebAssembly.
+//! Lightweight, ergonomic Solana JSON-RPC clients for WebAssembly and Crux.
 //!
 //! Wraps the Solana JSON-RPC API over HTTP and (optionally) PubSub WebSocket.
 //! Returns the canonical types from [`solana_rpc_client_types`].
@@ -7,9 +7,11 @@
 //!   default).
 //! - [`WasmPubsubClient`] — WebSocket PubSub client, gated behind the
 //!   `pubsub` feature (off by default).
+//! - `CruxClient` and `CruxPubsubClient` — shell-driven clients behind the
+//!   optional `crux` feature. See the `crux` module for the shell contract.
 //! - [`rpc`] — every method above as a transport-free builder, and [`codec`],
 //!   the request/response codec they are built on. Both are always available:
-//!   with `default-features = false` they are *all* that is compiled and the
+//!   with all features disabled they are *all* that is compiled and the
 //!   crate carries no wasm dependencies, so a host that owns its transport
 //!   (e.g. a Crux core driving `crux_http`) keeps the typed method list.
 //!
@@ -41,11 +43,17 @@ use crate::pubsub_provider::PubsubProvider;
 pub mod codec;
 pub mod rpc;
 
+#[cfg(feature = "crux")]
+#[cfg_attr(docsrs, doc(cfg(feature = "crux")))]
+pub mod crux;
+#[cfg(feature = "crux")]
+pub use crux::{CruxClient, CruxPubsubClient};
+
 #[cfg(feature = "http")]
 #[cfg_attr(docsrs, doc(cfg(feature = "http")))]
 pub mod provider;
 
-#[cfg(feature = "pubsub")]
+#[cfg(any(feature = "pubsub", feature = "crux"))]
 mod pubsub_methods;
 #[cfg(feature = "pubsub")]
 #[cfg_attr(docsrs, doc(cfg(feature = "pubsub")))]
