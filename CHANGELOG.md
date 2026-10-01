@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Updated the agave client types (`solana-rpc-client-types`, `solana-transaction-status-client-types`) to 4.3, which raises the floor on the SDK crates they share with `spume`: `solana-address` 2.7, `solana-hash` 4.6, `solana-signature` 3.5, `solana-reward-info` 7.0, `solana-short-vec` 3.3 and `solana-epoch-schedule` 3.3.
 - Subscription streams now yield one `Err` per disconnect and resume instead of ending, and `Subscription::id` returns a stable client-side id rather than the server's ([#37](https://github.com/aursen-labs/spume/pull/37)).
 - With `check_address` on, a rejected address now reports the offending string and the underlying parse error instead of a bare `"Invalid address"` ([#46](https://github.com/aursen-labs/spume/pull/46)).
 - Pubsub frames are built by borrowing their params instead of copying them through `json!`, and a notification's `result` is moved out of the incoming frame rather than cloned — an account notification no longer deep-copies the account data on its way to the stream ([#46](https://github.com/aursen-labs/spume/pull/46)).
