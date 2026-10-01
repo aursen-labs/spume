@@ -45,11 +45,7 @@ serde_json = "1"
 solana-address = "~2.7.0"
 solana-epoch-info = { version = "3.1", features = ["serde"] }
 solana-epoch-schedule = { version = "~3.3.0", features = ["serde"] }
-solana-hash = "~4.6.0"
-solana-reward-info = "~7.0.0"
 solana-rpc-client-types = "~4.3.0"
-solana-short-vec = "~3.3.0"
-solana-signature = "~3.5.2"
 solana-transaction-status-client-types = "4.3.0"
 wasm-bindgen = { version = "0.2", optional = true }
 wasm-bindgen-futures = { version = "0.4", optional = true }
