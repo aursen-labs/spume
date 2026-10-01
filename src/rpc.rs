@@ -52,11 +52,11 @@ use {
 
 type RpcResult<T> = Result<T, Box<RpcError>>;
 
-/// Expand the method table twice: once into transport-free builders in this
-/// module, once into `async` methods on [`WasmClient`](crate::WasmClient).
+/// Expand the method table into transport-free builders in this module and
+/// async methods on the enabled WASM and Crux clients.
 ///
 /// One entry per RPC method — signature, result type, request, params — so the
-/// two views are the same list by construction.
+/// client and builder views are the same list by construction.
 macro_rules! rpc_methods {
     ($(
         $(#[$meta:meta])*
@@ -76,6 +76,20 @@ macro_rules! rpc_methods {
                 $(#[$meta])*
                 pub async fn $name $(<$gen: $bound>)? (&self, $($arg: $ty),*) -> RpcResult<$ret> {
                     self.provider.send($request, $params).await
+                }
+            )*
+        }
+
+        #[cfg(feature = "crux")]
+        impl<Effect, Event> crate::CruxClient<Effect, Event>
+        where
+            Effect: From<crux_core::Request<crux_http::HttpRequest>> + Send + 'static,
+            Event: Send + 'static,
+        {
+            $(
+                $(#[$meta])*
+                pub async fn $name $(<$gen: $bound>)? (&self, $($arg: $ty),*) -> RpcResult<$ret> {
+                    self.send($name($($arg),*)?).await
                 }
             )*
         }
