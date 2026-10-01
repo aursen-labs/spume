@@ -28,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        features: ["--all-features", "--no-default-features"]
+        features: ["--all-features", "--no-default-features", "--no-default-features --features crux,check_address"]
     steps:
       - uses: actions/checkout@v6
       - name: Install stable + clippy
@@ -83,3 +83,9 @@ jobs:
 
       - name: Check the codec-only build on wasm
         run: cargo check --no-default-features --target wasm32-unknown-unknown
+
+      - name: Run Crux client tests
+        run: cargo test --no-default-features --features crux,check_address
+
+      - name: Check Crux on wasm
+        run: cargo check --no-default-features --features crux --target wasm32-unknown-unknown

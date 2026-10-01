@@ -2313,6 +2313,10 @@ dependencies = [
 name = "spume"
 version = "0.3.1"
 dependencies = [
+ "crux_core",
+ "crux_http",
+ "facet",
+ "futures",
  "getrandom 0.3.4",
  "getrandom 0.4.3",
  "serde",
