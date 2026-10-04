@@ -184,6 +184,10 @@ just apple/build       # iOS + macOS  (needs boltffi, xcodegen, Xcode)
 cd Android && just build   # Android   (needs boltffi, Android SDK/NDK)
 ```
 
+| iOS (SwiftUI) | Android (Jetpack Compose) |
+| --- | --- |
+| <img src="examples/crux-balance/screenshots/ios.png" alt="iOS balance example showing 0.000000001 SOL" width="280"> | <img src="examples/crux-balance/screenshots/android.png" alt="Android balance example showing 0.000000001 SOL" width="280"> |
+
 [`examples/leptos-slot-monitor`](examples/leptos-slot-monitor) is a small [Leptos](https://leptos.dev) CSR app that streams the live devnet slot via WebSocket and fetches the node version via HTTP:
 
 ```bash

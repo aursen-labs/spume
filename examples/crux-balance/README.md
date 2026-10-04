@@ -5,6 +5,10 @@ balance, with iOS/macOS and Android shells. Laid out like the upstream
 [`counter-http`](https://github.com/redbadger/crux/tree/master/examples/counter-http)
 example, so anything you learn there applies here.
 
+| iOS (SwiftUI) | Android (Jetpack Compose) |
+| --- | --- |
+| <img src="screenshots/ios.png" alt="iOS balance example showing 0.000000001 SOL" width="280"> | <img src="screenshots/android.png" alt="Android balance example showing 0.000000001 SOL" width="280"> |
+
 ```
 shared/     the Rust core: app, FFI surface, type codegen
 apple/      SwiftUI shell (iOS + macOS), Xcode project generated from project.yml
