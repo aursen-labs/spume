@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-04
+
 ### Added
 
 - Added automatic reconnection to the pubsub client, re-issuing live subscriptions so their streams survive a dropped connection ([#37](https://github.com/aursen-labs/spume/pull/37)).
@@ -16,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added the `codec` module (`request_body`, `interpret_body`, `Call`) and the `rpc` module, exposing every `WasmClient` method as a transport-free builder returning a `Call<R>` that serializes its own request body and parses its own response type. Both views are generated from one table, so they cannot drift apart ([#46](https://github.com/aursen-labs/spume/pull/46)).
 - Added the `http` feature (on by default) gating everything wasm; with `default-features = false` the crate builds on any target with no wasm dependencies, so hosts that own their transport — a Crux core issuing `crux_http` requests, a native client, a test harness — keep the typed method list ([#46](https://github.com/aursen-labs/spume/pull/46)).
 - Added `examples/crux-balance`, a Crux core reading an account balance through `crux_http` with `spume` as a codec-only dependency, plus SwiftUI (iOS/macOS) and Jetpack Compose shells. Its tests answer the HTTP effect themselves, so the round trip runs with no network and no shell ([#46](https://github.com/aursen-labs/spume/pull/46)).
+- Added `CruxClient` and `CruxPubsubClient` behind the optional `crux` feature, reusing the typed RPC and subscription methods with Crux HTTP and WebSocket effects ([#47](https://github.com/aursen-labs/spume/pull/47)).
 
 ### Changed
 
@@ -82,7 +85,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release.
 
-[Unreleased]: https://github.com/aursen-labs/spume/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/aursen-labs/spume/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/aursen-labs/spume/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/aursen-labs/spume/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/aursen-labs/spume/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/aursen-labs/spume/compare/v0.1.0...v0.2.0
